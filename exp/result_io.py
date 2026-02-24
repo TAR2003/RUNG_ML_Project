@@ -98,7 +98,7 @@ def load_edge_flip(fpath):
         edge_flip = np.load(os.path.join(fpath, 'flip.npy'))
     except Exception as e:
         raise ValueError('Edge filp file not found: unknown error. ' + e)
-    return torch.from_numpy(edge_flip).cuda()
+    return torch.from_numpy(edge_flip)
 
 
 

@@ -47,13 +47,13 @@ def get_dataset(dataset_name: str):
         X = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", dataset_name, "fea.pt")).to(torch.float32)
         y = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", dataset_name, "label.pt"))
         
-        return A.cuda(), X.cuda(), y.cuda()
+        return A, X, y
     else:
         A = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", "heter_data", dataset_name, "adj.pt"))
         X = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", "heter_data", dataset_name, "fea.pt")).to(torch.float32)
         y = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", "heter_data", dataset_name, "label.pt"))
         
-        return A.cuda(), X.cuda(), y.cuda()
+        return A, X, y
 
 
 def _load_npz(path: str):
@@ -74,7 +74,7 @@ def _load_npz(path: str):
             y = torch.tensor(loader["labels"][lcc_nodes], dtype=torch.int64)
         else:
             y = None
-        return A.cuda(), X.cuda(), y.cuda()
+        return A, X, y
 
 
 def _extract_csr(loader, prefix: str) -> sp.csr_matrix:

@@ -1,0 +1,29 @@
+name: rung_wsl
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - scipy
+  - pandas
+  - scikit-learn
+  - matplotlib
+  - tqdm
+  - networkx
+  - pip:
+      - torch --extra-index-url https://download.pytorch.org/whl/cpu
+      - torch-geometric
+      - torch-scatter
+      - torch-sparse
+      - torch-cluster
+      - torch-spline-conv
+      - munch
+      - typeguard
+      - torchtyping
+      - seml
+      - ConfigSpace
+      - numba
+      - llvmlite
+      - deeprobust

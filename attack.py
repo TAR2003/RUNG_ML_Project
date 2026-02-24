@@ -110,7 +110,7 @@ def rep_global_evasion(
         torch.manual_seed(seed if seed is not None else 0)
 
         #model_cur_rep.fit((A, X), y, train_idx, val_idx, **fit_params)
-        A, X, y = A.cuda(), X.cuda(), y.cuda()
+        A, X, y = A, X, y
         #fit(model_cur_rep, A, X, y, train_idx, val_idx, **fit_params)
         
         model_path = path+f'exp/models/{dataset_name}/{f"{args.model}_{args.norm}_{args.gamma}"}/0.000/split_0/rand_model_{i}/clean_model'

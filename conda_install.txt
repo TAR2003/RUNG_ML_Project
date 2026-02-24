@@ -1,0 +1,17 @@
+# Download the Miniconda installer for Linux
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+
+# Run the installer
+bash Miniconda3-latest-Linux-x86_64.sh -b -p $HOME/miniconda3
+
+# Initialize Conda for your shell
+$HOME/miniconda3/bin/conda init bash
+
+# Refresh your terminal so 'conda' command works
+source ~/.bashrc
+
+# Create the environment (this may take 2-5 minutes)
+conda env create -f environment.yml
+
+# Activate the environment
+conda activate rung_wsl

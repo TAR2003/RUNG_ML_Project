@@ -26,7 +26,7 @@ import re
 import gb
 
 def get_model_default(
-    dataset, model_name, custom_model_params={}, custom_fit_params={}, as_paper=True, seed=None, D=None, device='cuda:0'
+    dataset, model_name, custom_model_params={}, custom_fit_params={}, as_paper=True, seed=None, D=None, device='cpu'
 ):
     torch.manual_seed(0 if seed is None else seed)
 
