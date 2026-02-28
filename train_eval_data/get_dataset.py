@@ -8,26 +8,25 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 import torch
 
-def get_dataset(name):
-    '''Returns respective dataset 
-    
-    Returns:
-        A: adjacency matrix. sparse or dense
-        X: node feature matrix
-        train_idx: training node idx
-        val_idx: validation node idx
-        test_idx: testing node idx
-    '''
+# ---------------------------------------------------------------------------
+# Heterophilic dataset constants
+# ---------------------------------------------------------------------------
 
+HETEROPHILIC_DATASETS = [
+    'chameleon', 'squirrel', 'actor', 'cornell', 'texas', 'wisconsin'
+]
 
-def get_datasplit(name):
-    '''Generate the same training data split for the same dataset'''
-    return
-
-
-def get_target_node_idx(name):
-    '''Generate the same target node split for the same dataset.'''
-    return
+# Approximate edge homophily ratios (h = |{(u,v)∈E : y_u=y_v}| / |E|)
+HOMOPHILY_RATIOS = {
+    'chameleon':  0.23,
+    'squirrel':   0.22,
+    'actor':      0.22,
+    'cornell':    0.20,
+    'texas':      0.11,
+    'wisconsin':  0.21,
+    'cora':       0.81,
+    'citeseer':   0.74,
+}
 
 
 def get_dataset(dataset_name: str):
@@ -48,12 +47,160 @@ def get_dataset(dataset_name: str):
         y = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", dataset_name, "label.pt"))
         
         return A, X, y
+    elif dataset_name in HETEROPHILIC_DATASETS:
+        # Try loading cached .pt files first; if not present, download & convert.
+        return _load_or_download_heterophilic(dataset_name)
     else:
         A = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", "heter_data", dataset_name, "adj.pt"))
         X = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", "heter_data", dataset_name, "fea.pt")).to(torch.float32)
         y = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", "heter_data", dataset_name, "label.pt"))
         
         return A, X, y
+
+
+# ---------------------------------------------------------------------------
+# Heterophilic dataset utilities
+# ---------------------------------------------------------------------------
+
+def get_homophily_ratio(A: torch.Tensor, y: torch.Tensor) -> float:
+    """
+    Compute edge homophily ratio: fraction of edges connecting same-class nodes.
+
+    h = |{(u,v) ∈ E : y_u = y_v}| / |E|
+
+    h = 1.0 → perfectly homophilic (all edges within same class)
+    h = 0.0 → perfectly heterophilic (all edges between different classes)
+
+    Reference: Zhu et al. "Beyond Homophily in Graph Neural Networks" (2020)
+
+    Args:
+        A: [N, N] dense adjacency matrix (float)
+        y: [N] integer label tensor
+
+    Returns:
+        homophily: float in [0, 1]
+    """
+    src, dst = A.nonzero(as_tuple=True)
+    same_class = (y[src] == y[dst]).float()
+    return same_class.mean().item()
+
+
+def _load_or_download_heterophilic(
+    name: str,
+    root: str = None,
+) -> tuple:
+    """
+    Load a heterophilic dataset, downloading it via torch_geometric if needed.
+
+    Supported datasets:
+        chameleon  (WikipediaNetwork, h ≈ 0.23)
+        squirrel   (WikipediaNetwork, h ≈ 0.22)
+        actor      (Actor/Film,       h ≈ 0.22)
+        cornell    (WebKB,            h ≈ 0.20)
+        texas      (WebKB,            h ≈ 0.11)
+        wisconsin  (WebKB,            h ≈ 0.21)
+
+    The data are cached as `data/heter_data/{name}/{adj,fea,label}.pt` in the
+    same format used by the rest of the codebase, so subsequent loads are fast.
+
+    Args:
+        name: Dataset name (lowercase)
+        root: Root dir for torch_geometric downloads (default: data/heter_data)
+
+    Returns:
+        (A, X, y) — dense float32 adjacency, float32 features, int64 labels
+    """
+    base_dir = os.path.join(os.path.dirname(__file__), "..", "data", "heter_data")
+    cache_dir = os.path.join(base_dir, name)
+    adj_path   = os.path.join(cache_dir, "adj.pt")
+    fea_path   = os.path.join(cache_dir, "fea.pt")
+    label_path = os.path.join(cache_dir, "label.pt")
+
+    # ---- Fast path: load from cache ----------------------------------------
+    if os.path.exists(adj_path) and os.path.exists(fea_path) and os.path.exists(label_path):
+        A = torch.load(adj_path)
+        X = torch.load(fea_path).to(torch.float32)
+        y = torch.load(label_path)
+        return A, X, y
+
+    # ---- Slow path: download via torch_geometric and convert ----------------
+    print(f"[get_dataset] Downloading heterophilic dataset '{name}' via torch_geometric ...")
+    try:
+        import torch_geometric.transforms as T
+        from torch_geometric.utils import to_dense_adj
+    except ImportError as e:
+        raise ImportError(
+            "torch_geometric is required for heterophilic datasets. "
+            "Install it with:  pip install torch_geometric"
+        ) from e
+
+    download_root = root if root is not None else os.path.join(base_dir, "_pyg_downloads")
+    transform = T.NormalizeFeatures()
+
+    if name in ('chameleon', 'squirrel'):
+        from torch_geometric.datasets import WikipediaNetwork
+        dataset = WikipediaNetwork(root=download_root, name=name, transform=transform)
+    elif name == 'actor':
+        from torch_geometric.datasets import Actor
+        dataset = Actor(root=download_root, transform=transform)
+    elif name in ('cornell', 'texas', 'wisconsin'):
+        from torch_geometric.datasets import WebKB
+        dataset = WebKB(root=download_root, name=name, transform=transform)
+    else:
+        raise ValueError(f"Unknown heterophilic dataset: '{name}'")
+
+    data = dataset[0]
+    N = data.num_nodes
+
+    # Convert to dense adjacency (codebase uses dense tensors)
+    # to_dense_adj returns [1, N, N]; squeeze to [N, N]
+    A = to_dense_adj(data.edge_index, max_num_nodes=N).squeeze(0)
+    # Ensure symmetry and no self-loops (matching _fix_adj_mat convention)
+    A = (A + A.t()).clamp(max=1.0)
+    A.fill_diagonal_(0.0)
+
+    X = data.x.to(torch.float32)            # [N, F]
+    y = data.y.to(torch.int64)              # [N]
+
+    homophily = get_homophily_ratio(A, y)
+    print(f"  Nodes: {N}, Edges: {int(A.sum().item()//2)}, "
+          f"Features: {X.shape[1]}, Classes: {int(y.max().item())+1}, "
+          f"Homophily: {homophily:.4f}")
+
+    # Cache to disk
+    os.makedirs(cache_dir, exist_ok=True)
+    torch.save(A, adj_path)
+    torch.save(X, fea_path)
+    torch.save(y, label_path)
+    print(f"  Cached to {cache_dir}")
+
+    return A, X, y
+
+
+def load_heterophilic_dataset(name: str, root: str = None, split_seed: int = 42):
+    """
+    Public API: load a heterophilic dataset and return data with homophily info.
+
+    Args:
+        name:       Dataset name (lowercase), see HETEROPHILIC_DATASETS
+        root:       Optional custom root for torch_geometric downloads
+        split_seed: Random seed (splits are generated by get_splits() separately)
+
+    Returns:
+        A:          [N, N] dense float32 adjacency matrix
+        X:          [N, F] float32 feature matrix
+        y:          [N] int64 label tensor
+        homophily:  float, measured edge homophily ratio
+    """
+    if name not in HETEROPHILIC_DATASETS:
+        raise ValueError(
+            f"Unknown heterophilic dataset: '{name}'. "
+            f"Choose from: {HETEROPHILIC_DATASETS}"
+        )
+    A, X, y = _load_or_download_heterophilic(name, root=root)
+    homophily = get_homophily_ratio(A, y)
+    return A, X, y, homophily
+
 
 
 def _load_npz(path: str):

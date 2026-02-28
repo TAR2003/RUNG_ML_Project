@@ -32,6 +32,11 @@ parser = argparse.ArgumentParser(description='Train classification network')
 # model setting
 parser.add_argument('--model',type=str, default='RUNG')
 parser.add_argument('--norm',type=str, default='MCP')
+parser.add_argument('--penalty',type=str, default=None,
+                    choices=['mcp', 'scad', 'l1', 'l2', 'adaptive', None],
+                    help='Penalty function override (maps to --norm). '
+                         'mcp=MCP, scad=SCAD, l1=L1, l2=L2, adaptive=ADAPTIVE. '
+                         'If set, overrides --norm for RUNG models.')
 parser.add_argument('--gamma',type=float, default=6.0)
 parser.add_argument('--data',type=str, default='cora')
 
@@ -45,6 +50,10 @@ if args.model == 'APPNP':
     args.norm = 'L2'
 elif args.model == 'L1':
     args.norm = 'L1'
+# --penalty overrides --norm (convenience alias with lower-case names)
+_PENALTY_TO_NORM = {'mcp': 'MCP', 'scad': 'SCAD', 'l1': 'L1', 'l2': 'L2', 'adaptive': 'ADAPTIVE'}
+if args.penalty is not None:
+    args.norm = _PENALTY_TO_NORM[args.penalty.lower()]
 
 
 def clean_rep(model, train_param, dataset_name, seed=None):
