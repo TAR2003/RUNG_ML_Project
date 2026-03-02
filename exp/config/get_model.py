@@ -73,6 +73,33 @@ def get_model_default(
                 f"Unknown norm '{norm}' for RUNG. "
                 f"Choose from: MCP, SCAD, L1, L2, ADAPTIVE."
             )
+    elif model_name == 'RUNG_new':
+        # RUNG_new — uses the refactored model/penalty.py code path (PenaltyFunction class).
+        # Numerical differences from baseline RUNG: eps=1e-8 (vs ep=0.01 offset in att_func.py),
+        # and SCAD / ADAPTIVE penalties are only cleanly supported via this path.
+        norm_upper = norm.upper()
+        if norm_upper == 'MCP':
+            w_func = PenaltyFunction.get_w_func('mcp', gamma)
+            return _build_rung(w_func), custom_fit_params
+        elif norm_upper == 'SCAD':
+            # lam = gamma/3.7 so zero-region a*lam = gamma matches MCP cutoff
+            w_func = PenaltyFunction.get_w_func('scad', gamma / 3.7)
+            return _build_rung(w_func), custom_fit_params
+        elif norm_upper == 'L1':
+            w_func = PenaltyFunction.get_w_func('l1', gamma)
+            return _build_rung(w_func), custom_fit_params
+        elif norm_upper == 'L2':
+            w_func = PenaltyFunction.get_w_func('l2', gamma)
+            return _build_rung(w_func), custom_fit_params
+        elif norm_upper == 'ADAPTIVE':
+            # MCP as base w_func; adaptive weighting computed inside forward()
+            w_func = PenaltyFunction.get_w_func('mcp', gamma)
+            return _build_rung(w_func, penalty_flag='adaptive'), custom_fit_params
+        else:
+            raise ValueError(
+                f"Unknown norm '{norm}' for RUNG_new. "
+                f"Choose from: MCP, SCAD, L1, L2, ADAPTIVE."
+            )
     elif model_name == 'GCN':
         return gb.model.GCN(n_feat=D, n_class=C, hidden_dims=[64], dropout=0.5).to(device), custom_fit_params
     elif model_name == 'GAT':

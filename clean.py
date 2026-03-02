@@ -74,7 +74,7 @@ def clean_rep(model, train_param, dataset_name, seed=None):
         torch.manual_seed(seed if seed is not None else 0)
         if args.model in  ['GCN','GAT']:
             cur_model.fit((A, X), y, train_idx, val_idx, progress=False, **train_param)
-        elif args.model == 'RUNG':
+        elif args.model in ('RUNG', 'RUNG_new', 'MLP', 'L1', 'APPNP'):
             fit(cur_model, A, X, y, train_idx, val_idx, **train_param)
         
         cur_model.eval()
