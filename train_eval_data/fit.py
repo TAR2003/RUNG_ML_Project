@@ -27,6 +27,13 @@ def fit(model: torch.nn.Module, A, X, y, train_idx, val_idx, **kwargs):
     #Train model on graph A, X, using train_idx and val_idx
     #given the settings in kwargs
     
+    device = next(model.parameters()).device
+    A = A.to(device)
+    X = X.to(device)
+    y = y.to(device)
+    train_idx = train_idx.to(device)
+    val_idx = val_idx.to(device)
+
     optimizer = torch.optim.Adam(model.parameters(), **{key: kwargs[key] for key in kwargs if key in ['lr', 'weight_decay']})
 
 
@@ -42,5 +49,4 @@ def fit(model: torch.nn.Module, A, X, y, train_idx, val_idx, **kwargs):
         if i % 10 == 0:
             model.eval()
             print(accuracy(model(A, X)[val_idx], y[val_idx]))
-        
 

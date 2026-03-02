@@ -60,8 +60,16 @@ def clean_rep(model, train_param, dataset_name, seed=None):
     A, X, y = get_dataset(dataset_name)
     sp = get_splits(y)
 
+    device = next(model.parameters()).device
+    A = A.to(device)
+    X = X.to(device)
+    y = y.to(device)
+
     acc, models = [], []
     for train_idx, val_idx, test_idx in sp:
+        train_idx = train_idx.to(device)
+        val_idx   = val_idx.to(device)
+        test_idx  = test_idx.to(device)
         cur_model = copy.deepcopy(model)
         torch.manual_seed(seed if seed is not None else 0)
         if args.model in  ['GCN','GAT']:

@@ -27,8 +27,10 @@ import re
 import gb
 
 def get_model_default(
-    dataset, model_name, custom_model_params={}, custom_fit_params={}, as_paper=True, seed=None, D=None, device='cpu'
+    dataset, model_name, custom_model_params={}, custom_fit_params={}, as_paper=True, seed=None, D=None, device=None
 ):
+    if device is None:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.manual_seed(0 if seed is None else seed)
 
     A, X, y = get_dataset(dataset)
