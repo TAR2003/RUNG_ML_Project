@@ -134,4 +134,23 @@ def get_model_default(
         return RUNG(D, C, [64], get_l12_att_func(custom_model_params['norm']), 0.9).to(device), custom_fit_params
     elif model_name == 'MLP':
         return RUNG(D, C, [64], get_mcp_att_func(gamma), 0.9, prop_step=0).to(device), custom_fit_params
-        
+    # Compound aliases — resolve to the canonical model + norm branch above
+    elif model_name == 'RUNG_new_SCAD':
+        w_func = PenaltyFunction.get_w_func('scad', gamma / 3.7)
+        return _build_rung(w_func), custom_fit_params
+    elif model_name == 'RUNG_new_L1':
+        w_func = PenaltyFunction.get_w_func('l1', gamma)
+        return _build_rung(w_func), custom_fit_params
+    elif model_name == 'RUNG_new_L2':
+        w_func = PenaltyFunction.get_w_func('l2', gamma)
+        return _build_rung(w_func), custom_fit_params
+    elif model_name == 'RUNG_new_ADAPTIVE':
+        w_func = PenaltyFunction.get_w_func('mcp', gamma)
+        return _build_rung(w_func, penalty_flag='adaptive'), custom_fit_params
+    else:
+        raise ValueError(
+            f"Unknown model_name '{model_name}'. "
+            f"Valid choices: RUNG, RUNG_new, RUNG_new_SCAD, RUNG_new_L1, "
+            f"RUNG_new_L2, RUNG_new_ADAPTIVE, GCN, GAT, APPNP, L1, MLP."
+        )
+

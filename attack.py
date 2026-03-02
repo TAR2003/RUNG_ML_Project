@@ -49,6 +49,20 @@ parser.add_argument('--gamma',type=float, default=6.0)
 parser.add_argument('--data',type=str, default='cora')
 
 args = parser.parse_args()
+# Compound model names encode both model and norm (e.g. RUNG_new_SCAD).
+# Normalise them into separate args.model / args.norm before anything else.
+_COMPOUND_MODEL_MAP = {
+    'RUNG_new_SCAD':     ('RUNG_new', 'SCAD'),
+    'RUNG_new_L1':       ('RUNG_new', 'L1'),
+    'RUNG_new_L2':       ('RUNG_new', 'L2'),
+    'RUNG_new_ADAPTIVE': ('RUNG_new', 'ADAPTIVE'),
+    'RUNG_SCAD':         ('RUNG',     'SCAD'),
+    'RUNG_L1':           ('RUNG',     'L1'),
+    'RUNG_L2':           ('RUNG',     'L2'),
+}
+if args.model in _COMPOUND_MODEL_MAP:
+    args.model, args.norm = _COMPOUND_MODEL_MAP[args.model]
+
 if args.model == 'APPNP':
     args.norm = 'L2'
 elif args.model == 'L1':
