@@ -7,6 +7,7 @@ from sklearn.model_selection import train_test_split
 
 import numpy as np
 import torch
+from utils import device
 
 def get_dataset(name):
     '''Returns respective dataset 
@@ -43,17 +44,17 @@ def get_dataset(dataset_name: str):
             raise e
             return _load_npz(f"{FALLBACK_SRC_PATH}/data/{dataset_name}.npz")
     elif dataset_name in ['flickr', 'reddit','dblp','pubmed', 'polblogs','acm','BlogCatalog','uai']:
-        A = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", dataset_name, "adj.pt"))
-        X = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", dataset_name, "fea.pt")).to(torch.float32)
-        y = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", dataset_name, "label.pt"))
+        A = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", dataset_name, "adj.pt"), map_location=device)
+        X = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", dataset_name, "fea.pt"), map_location=device).to(torch.float32)
+        y = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", dataset_name, "label.pt"), map_location=device)
         
-        return A, X, y
+        return A.to(device), X.to(device), y.to(device)
     else:
-        A = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", "heter_data", dataset_name, "adj.pt"))
-        X = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", "heter_data", dataset_name, "fea.pt")).to(torch.float32)
-        y = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", "heter_data", dataset_name, "label.pt"))
+        A = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", "heter_data", dataset_name, "adj.pt"), map_location=device)
+        X = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", "heter_data", dataset_name, "fea.pt"), map_location=device).to(torch.float32)
+        y = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", "heter_data", dataset_name, "label.pt"), map_location=device)
         
-        return A, X, y
+        return A.to(device), X.to(device), y.to(device)
 
 
 def _load_npz(path: str):
@@ -62,16 +63,16 @@ def _load_npz(path: str):
         A = _fix_adj_mat(_extract_csr(loader, "adj"))
         _, comp_ids = connected_components(A)
         lcc_nodes = np.nonzero(comp_ids == mode(comp_ids)[0])[0]
-        A = torch.tensor(A[lcc_nodes, :][:, lcc_nodes].todense(), dtype=torch.float32)
+        A = torch.tensor(A[lcc_nodes, :][:, lcc_nodes].todense(), dtype=torch.float32).to(device)
         if "attr_data" in loader:
             X = torch.tensor(
                 _extract_csr(loader, "attr")[lcc_nodes, :].todense(),
                 dtype=torch.float32,
-            )
+            ).to(device)
         else:
-            X = torch.eye(A.shape[0])
+            X = torch.eye(A.shape[0]).to(device)
         if "labels" in loader:
-            y = torch.tensor(loader["labels"][lcc_nodes], dtype=torch.int64)
+            y = torch.tensor(loader["labels"][lcc_nodes], dtype=torch.int64).to(device)
         else:
             y = None
         return A, X, y

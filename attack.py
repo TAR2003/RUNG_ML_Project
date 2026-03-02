@@ -8,6 +8,7 @@ import os
 from train_eval_data.get_dataset import get_dataset, get_splits
 from gb.exutil import make_attacked_model
 from gb.metric import accuracy
+from utils import device
 from train_eval_data.fit import fit
 import copy
 import yaml
@@ -106,7 +107,7 @@ def rep_global_evasion(
 
     cleans, accs, edge_flips, models = [], [], [], []
     for i, (train_idx, val_idx, test_idx) in enumerate(sps):
-        model_cur_rep = copy.deepcopy(model)
+        model_cur_rep = copy.deepcopy(model).to(device)
         torch.manual_seed(seed if seed is not None else 0)
 
         #model_cur_rep.fit((A, X), y, train_idx, val_idx, **fit_params)
@@ -115,7 +116,7 @@ def rep_global_evasion(
         
         model_path = path+f'exp/models/{dataset_name}/{f"{args.model}_{args.norm}_{args.gamma}"}/0.000/split_0/rand_model_{i}/clean_model'
  
-        model_cur_rep.load_state_dict(torch.load(model_path))
+        model_cur_rep.load_state_dict(torch.load(model_path, map_location=device))
         
         
         budget_edge_num = int(budget_ratio * A.count_nonzero().item() // 2)

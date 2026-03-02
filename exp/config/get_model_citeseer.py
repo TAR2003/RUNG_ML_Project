@@ -1,6 +1,6 @@
 # dataset, train and eval
 from train_eval_data.get_dataset import get_dataset, get_splits
-from utils import accuracy
+from utils import accuracy, device as default_device
 import copy
 import yaml
 from exp.result_io import save_acc, rep_save_model
@@ -25,8 +25,10 @@ import re
 
 
 def get_model_default_citeseer(
-    model_name, custom_model_params={}, custom_fit_params={}, as_paper=True, seed=None, D=None, device='cpu'
+    model_name, custom_model_params={}, custom_fit_params={}, as_paper=True, seed=None, D=None, device=None
 ):
+    if device is None:
+        device = default_device
     torch.manual_seed(0 if seed is None else seed)
 
     A, X, y = get_dataset("citeseer")

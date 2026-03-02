@@ -10,7 +10,7 @@ from exp.config.get_model_citeseer import get_model_default_citeseer
 from exp.config.get_model import get_model_default
 # dataset, train and eval
 from train_eval_data.get_dataset import get_dataset, get_splits
-from utils import accuracy
+from utils import accuracy, device
 import copy
 import yaml
 from exp.result_io import save_acc, rep_save_model
@@ -53,7 +53,7 @@ def clean_rep(model, train_param, dataset_name, seed=None):
 
     acc, models = [], []
     for train_idx, val_idx, test_idx in sp:
-        cur_model = copy.deepcopy(model)
+        cur_model = copy.deepcopy(model).to(device)
         torch.manual_seed(seed if seed is not None else 0)
         if args.model in  ['GCN','GAT']:
             cur_model.fit((A, X), y, train_idx, val_idx, progress=False, **train_param)

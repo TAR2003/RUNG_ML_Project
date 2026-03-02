@@ -92,13 +92,14 @@ def save_edge_flip(edge_flip, fpath):
 
 
 def load_edge_flip(fpath):
+    from utils import device
     if not os.path.exists(fpath):
         raise ValueError('Edge filp file not found: path does not exist')
     try:
         edge_flip = np.load(os.path.join(fpath, 'flip.npy'))
     except Exception as e:
         raise ValueError('Edge filp file not found: unknown error. ' + e)
-    return torch.from_numpy(edge_flip)
+    return torch.from_numpy(edge_flip).to(device)
 
 
 
@@ -112,6 +113,7 @@ def rep_save_model(model_name, budget, models, rep_per_split=5, save_name='clean
         torch.save(model.state_dict(), fpath)
 
 def rep_load_model(model_name, budget, model, rep_per_split=5, save_name='clean_model', neglect_ada_model=False, dataset_name='cora', debug=False):
+    from utils import device
     models = []
     rep = 0
     while True:
@@ -119,8 +121,8 @@ def rep_load_model(model_name, budget, model, rep_per_split=5, save_name='clean_
             if neglect_ada_model and rep % rep_per_split == 0:
                 raise Exception # not load the model init that is attacked
             fpath = f'{os.path.dirname(__file__)}/{dataset_name}_flips/{model_name}/models/{budget:.3f}/split_{rep // rep_per_split}/rand_model_{rep % rep_per_split}/{save_name}'
-            cur_model: torch.nn.Module = copy.deepcopy(model)
-            cur_model.load_state_dict(torch.load(fpath))
+            cur_model: torch.nn.Module = copy.deepcopy(model).to(device)
+            cur_model.load_state_dict(torch.load(fpath, map_location=device))
             models.append(cur_model.eval())
         except Exception as e:
             if debug:
