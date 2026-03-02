@@ -30,7 +30,32 @@ def get_model_default(
     dataset, model_name, custom_model_params={}, custom_fit_params={}, as_paper=True, seed=None, D=None, device=None
 ):
     if device is None:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # prefer cuda when available, but validate compute capability against
+        # the PyTorch build.  Many older GPUs (e.g. GeForce MX130, capability
+        # 5.0) are no longer supported by recent PyTorch binaries and will
+        # produce ``no kernel image is available for execution on the device``
+        # errors observed on the local machine.  In those cases we force CPU
+        # execution instead of crashing.
+        if torch.cuda.is_available():
+            try:
+                props = torch.cuda.get_device_properties(0)
+                # PyTorch wheels currently support sm_70 and higher; adjust
+                # threshold if the build changes.
+                if props.major < 7:
+                    print(
+                        f"Detected GPU {props.name} with compute capability"
+                        f" {props.major}.{props.minor} which is unsupported by "
+                        "this PyTorch installation; falling back to CPU."
+                    )
+                    device = torch.device('cpu')
+                else:
+                    device = torch.device('cuda')
+            except Exception:
+                # if for some reason we can't query properties, still try
+                # cuda and let the normal error handling occur.
+                device = torch.device('cuda')
+        else:
+            device = torch.device('cpu')
     torch.manual_seed(0 if seed is None else seed)
 
     A, X, y = get_dataset(dataset)

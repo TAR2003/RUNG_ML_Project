@@ -15,6 +15,16 @@ This project is built upon [Python 3.10](https://www.python.org).
 For a complete list of required packages, please find them in the `requirements.txt` file.
 It is recommended to create a new `conda` environment for this project as it may be tricky to install PyQt as it can mess up your current dependencies.
 
+> **GPU compatibility note:** the code will attempt to use a CUDA device when
+> `torch.cuda.is_available()` returns true.  Modern PyTorch binaries only
+> support GPUs with compute capability **7.0 or higher**.  Older cards (e.g. the
+> NVIDIA GeForce MX130 found in many laptops) will trigger errors like
+> ``no kernel image is available for execution on the device``.  In such cases
+> you can either reinstall a PyTorch build compiled for your GPU or simply
+> force CPU execution by setting `CUDA_VISIBLE_DEVICES=`` or using
+> `--device cpu` (see source), and the training scripts will fall back
+> automatically.
+
 ```bash
 conda create -n rung python=3.10
 conda activate rung
