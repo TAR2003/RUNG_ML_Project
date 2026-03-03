@@ -1,0 +1,16 @@
+# Core Requirements
+numpy
+pandas
+matplotlib
+scikit-learn
+
+# RUNG Specifics
+seml
+munch
+torchtyping
+
+# Deep Learning
+torch
+torchvision
+torchaudio
+numba
