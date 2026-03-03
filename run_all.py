@@ -28,6 +28,7 @@ Compound model names (encode both architecture and norm in one token):
 
 Standalone model names (pass as-is, no compound expansion):
     RUNG_learnable_gamma  — RUNG with per-layer learnable SCAD gamma parameters.
+    RUNG_confidence_lambda — RUNG with learnable gamma AND per-node confidence lambda.
 
 Logs are written to:
     log/<dataset>/clean/<model>_<norm>_<gamma>.log
@@ -88,6 +89,36 @@ parser.add_argument(
     help="Gamma regularisation strength for RUNG_learnable_gamma (default: 0 = off).",
 )
 parser.add_argument(
+    "--confidence_mode", type=str, default="protect_uncertain",
+    choices=["protect_uncertain", "protect_confident", "symmetric"],
+    help=(
+        "Confidence-to-lambda mapping mode for RUNG_confidence_lambda. "
+        "'protect_uncertain': uncertain nodes get higher lambda. "
+        "'protect_confident': confident nodes get higher lambda. "
+        "'symmetric': mid-confidence nodes get highest lambda."
+    ),
+)
+parser.add_argument(
+    "--alpha_init", type=float, default=1.0,
+    help="Initial alpha sharpness for RUNG_confidence_lambda (default: 1.0).",
+)
+parser.add_argument(
+    "--normalize_lambda", type=lambda x: x.lower() != 'false', default=True,
+    help="Normalise per-node lambdas (RUNG_confidence_lambda, default: True).",
+)
+parser.add_argument(
+    "--alpha_lr_factor", type=float, default=0.1,
+    help="LR multiplier for alpha in RUNG_confidence_lambda (default: 0.1).",
+)
+parser.add_argument(
+    "--alpha_reg_strength", type=float, default=0.001,
+    help="Alpha regularisation strength for RUNG_confidence_lambda (default: 0.001).",
+)
+parser.add_argument(
+    "--warmup_epochs", type=int, default=50,
+    help="Warmup epochs (MLP-only) for RUNG_confidence_lambda (default: 50).",
+)
+parser.add_argument(
     "--skip_clean", action="store_true",
     help="Skip the clean-training step (use previously saved models).",
 )
@@ -102,6 +133,11 @@ args = parser.parse_args()
 # ---------------------------------------------------------------------------
 PYTHON       = sys.executable
 PROJECT_ROOT = Path(__file__).parent.resolve()
+
+
+def _header(title: str) -> None:
+    bar = "=" * (len(title) + 4)
+    print(f"\n{bar}\n  {title}\n{bar}", flush=True)
 
 
 def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
@@ -128,15 +164,22 @@ def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
                 f"--gamma_lr_factor={args.gamma_lr_factor}",
                 f"--gamma_reg_strength={args.gamma_reg_strength}",
             ]
-
-    t0     = time.perf_counter()
-    result = subprocess.run(cmd, cwd=PROJECT_ROOT)
-    return result.returncode == 0, time.perf_counter() - t0
-
-
-def _header(text: str) -> None:
-    bar = "=" * 60
-    print(f"\n{bar}\n  {text}\n{bar}\n", flush=True)
+        elif model == "RUNG_confidence_lambda":
+            cmd += [
+                f"--gamma_init_strategy={args.gamma_init_strategy}",
+                f"--gamma_lr_factor={args.gamma_lr_factor}",
+                f"--gamma_reg_strength={args.gamma_reg_strength}",
+                f"--confidence_mode={args.confidence_mode}",
+                f"--alpha_init={args.alpha_init}",
+                f"--normalize_lambda={args.normalize_lambda}",
+                f"--alpha_lr_factor={args.alpha_lr_factor}",
+                f"--alpha_reg_strength={args.alpha_reg_strength}",
+                f"--warmup_epochs={args.warmup_epochs}",
+            ]
+    t0 = time.perf_counter()
+    proc = subprocess.run(cmd, cwd=str(PROJECT_ROOT))
+    elapsed = time.perf_counter() - t0
+    return proc.returncode == 0, elapsed
 
 
 # ---------------------------------------------------------------------------

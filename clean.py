@@ -6,6 +6,7 @@ sys.path.append("./")
 # models
 from train_eval_data.fit import fit
 from train_eval_data.fit_learnable_gamma import fit_learnable_gamma
+from train_eval_data.fit_confidence_lambda import fit_confidence_lambda
 from exp.config.get_model_cora import get_model_default_cora
 from exp.config.get_model_citeseer import get_model_default_citeseer
 from exp.config.get_model import get_model_default
@@ -53,6 +54,32 @@ parser.add_argument('--gamma_lr_factor', type=float, default=0.2,
 parser.add_argument('--gamma_reg_strength', type=float, default=0.0,
                     help='Regularisation strength for gamma params in RUNG_learnable_gamma. '
                          '0 = disabled. Try 0.01 if gammas diverge during training.')
+
+# RUNG_confidence_lambda specific arguments
+parser.add_argument('--alpha_init', type=float, default=1.0,
+                    help='Initial sharpness for confidence-to-lambda mapping. '
+                         'alpha=1 is linear. alpha>1 amplifies confidence differences. '
+                         'alpha is learnable — this is just the initialisation.')
+parser.add_argument('--alpha_lr_factor', type=float, default=0.1,
+                    help='LR multiplier for alpha param in RUNG_confidence_lambda. '
+                         'alpha_lr = lr * alpha_lr_factor. Recommended: 0.05–0.2.')
+parser.add_argument('--alpha_reg_strength', type=float, default=0.001,
+                    help='Alpha regularisation strength for RUNG_confidence_lambda. '
+                         '0 = disabled. Penalises alpha deviating from 1.0.')
+parser.add_argument('--confidence_mode', type=str, default='protect_uncertain',
+                    choices=['protect_uncertain', 'protect_confident', 'symmetric'],
+                    help="How to map confidence to lambda. "
+                         "'protect_uncertain': uncertain nodes get higher lambda. "
+                         "'protect_confident': confident nodes get higher lambda. "
+                         "'symmetric': mid-confidence nodes get highest lambda.")
+parser.add_argument('--normalize_lambda', type=lambda x: x.lower() != 'false',
+                    default=True,
+                    help='If True, normalise per-node lambdas so mean = lambda_base. '
+                         'Recommended True for fair comparison with RUNG_learnable_gamma.')
+parser.add_argument('--warmup_epochs', type=int, default=50,
+                    help='Epochs to train only MLP before unfreezing gamma + alpha. '
+                         'Ensures MLP confidences are meaningful before calibration. '
+                         'Set to 0 to disable warmup.')
 
 # fitting setting
 parser.add_argument('--lr',type=float, default=5e-2)
@@ -113,6 +140,16 @@ def clean_rep(model, train_param, dataset_name, seed=None):
                 gamma_reg_strength=args.gamma_reg_strength,
                 **train_param,
             )
+        elif args.model == 'RUNG_confidence_lambda':
+            fit_confidence_lambda(
+                cur_model, A, X, y, train_idx, val_idx,
+                gamma_lr_factor=args.gamma_lr_factor,
+                alpha_lr_factor=args.alpha_lr_factor,
+                gamma_reg_strength=args.gamma_reg_strength,
+                alpha_reg_strength=args.alpha_reg_strength,
+                warmup_epochs=args.warmup_epochs,
+                **train_param,
+            )
         
         cur_model.eval()
         acc.append(accuracy(cur_model(A, X)[test_idx, :], y[test_idx]).cpu().item())
@@ -131,6 +168,12 @@ def make_clean_model_and_save(do_save_model=False, do_save_acc=False, rep_num=5,
     # get_model_default can forward them to the constructor.
     if args.model == 'RUNG_learnable_gamma':
         model_config['gamma_init_strategy'] = args.gamma_init_strategy
+    # Pass RUNG_confidence_lambda-specific params into model config.
+    elif args.model == 'RUNG_confidence_lambda':
+        model_config['gamma_init_strategy'] = args.gamma_init_strategy
+        model_config['alpha_init']          = args.alpha_init
+        model_config['confidence_mode']     = args.confidence_mode
+        model_config['normalize_lambda']    = args.normalize_lambda
 
     model_ls = [
         [args.model, model_config, {'lr':args.lr, 'weight_decay':args.weight_decay,'max_epoch': args.max_epoch}],

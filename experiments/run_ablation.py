@@ -111,6 +111,98 @@ EXPERIMENTS: Dict[str, Dict[str, Any]] = {
         'num_layers':  [1, 2, 3, 5, 7, 10, 15, 20],  # Vary layers
         'measure_bias': False,
     },
+
+    # ------------------------------------------------------------------
+    # RUNG_confidence_lambda experiments
+    # ------------------------------------------------------------------
+
+    'confidence_mode_comparison': {
+        'description': (
+            'Compare three confidence modes vs RUNG_learnable_gamma baseline. '
+            'Primary experiment for RUNG_confidence_lambda. '
+            'Hypothesis: protect_uncertain mode improves robustness because '
+            'adversarial edges target nodes with low prediction confidence.'
+        ),
+        'models':             ['RUNG_learnable_gamma', 'RUNG_confidence_lambda'],
+        'datasets':           ['cora', 'citeseer'],
+        'confidence_modes':   ['protect_uncertain', 'protect_confident', 'symmetric'],
+        'normalize_lambda':   [True],
+        'alpha_init':         [1.0],
+        'budgets':            [0, 20, 50, 100, 150, 200],
+        'attack_type':        'global',
+        'seeds':              [0, 1, 2, 3, 4],
+        'num_layers':         10,
+        'gamma':              6.0,
+        'lambda_hat':         0.9,
+        'gamma_init_strategy': 'uniform',
+        'warmup_epochs':      50,
+        'measure_bias':       False,
+    },
+
+    'normalize_ablation': {
+        'description': (
+            'Test whether lambda normalization matters: '
+            'normalize=True isolates redistribution effect; '
+            'normalize=False allows magnitude change too. '
+            'Comparing these isolates the contribution of redistribution vs magnitude.'
+        ),
+        'models':             ['RUNG_confidence_lambda'],
+        'datasets':           ['cora'],
+        'confidence_modes':   ['protect_uncertain'],
+        'normalize_lambda':   [True, False],
+        'alpha_init':         [1.0],
+        'budgets':            [0, 20, 50, 100, 200],
+        'attack_type':        'global',
+        'seeds':              [0, 1, 2, 3, 4],
+        'num_layers':         10,
+        'gamma':              6.0,
+        'lambda_hat':         0.9,
+        'warmup_epochs':      50,
+        'measure_bias':       False,
+    },
+
+    'alpha_sensitivity': {
+        'description': (
+            'How much does alpha_init matter for final performance? '
+            'alpha=1 is linear; alpha>1 amplifies confidence differences. '
+            'alpha is learnable so init sensitivity reveals convergence landscape.'
+        ),
+        'models':             ['RUNG_confidence_lambda'],
+        'datasets':           ['cora'],
+        'confidence_modes':   ['protect_uncertain'],
+        'normalize_lambda':   [True],
+        'alpha_init':         [0.5, 1.0, 2.0, 3.0, 5.0],
+        'budgets':            [0, 20, 50, 100, 200],
+        'attack_type':        'global',
+        'seeds':              [0, 1, 2],
+        'num_layers':         10,
+        'gamma':              6.0,
+        'lambda_hat':         0.9,
+        'warmup_epochs':      50,
+        'measure_bias':       False,
+    },
+
+    'warmup_ablation': {
+        'description': (
+            'Does the warmup phase matter for convergence quality? '
+            'warmup=0 trains all params jointly from epoch 1; '
+            'larger warmup gives MLP more time to produce reliable confidences '
+            'before alpha and gamma calibrate.'
+        ),
+        'models':             ['RUNG_confidence_lambda'],
+        'datasets':           ['cora'],
+        'confidence_modes':   ['protect_uncertain'],
+        'normalize_lambda':   [True],
+        'alpha_init':         [1.0],
+        'warmup_epochs':      [0, 20, 50, 100, 200],
+        'budgets':            [0, 50, 100, 200],
+        'attack_type':        'global',
+        'seeds':              [0, 1, 2],
+        'num_layers':         10,
+        'gamma':              6.0,
+        'lambda_hat':         0.9,
+        'measure_bias':       False,
+    },
 }
 
 
