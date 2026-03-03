@@ -26,6 +26,9 @@ Compound model names (encode both architecture and norm in one token):
     RUNG_new_SCAD   RUNG_new_L1   RUNG_new_L2   RUNG_new_ADAPTIVE
     RUNG_SCAD       RUNG_L1       RUNG_L2
 
+Standalone model names (pass as-is, no compound expansion):
+    RUNG_learnable_gamma  — RUNG with per-layer learnable SCAD gamma parameters.
+
 Logs are written to:
     log/<dataset>/clean/<model>_<norm>_<gamma>.log
     log/<dataset>/attack/<model>_norm<norm>_gamma<gamma>.log
@@ -72,6 +75,19 @@ parser.add_argument(
     help="Max training epochs (default: 300).",
 )
 parser.add_argument(
+    "--gamma_init_strategy", type=str, default="uniform",
+    choices=["uniform", "decreasing", "increasing"],
+    help="Gamma initialisation strategy for RUNG_learnable_gamma (default: uniform).",
+)
+parser.add_argument(
+    "--gamma_lr_factor", type=float, default=0.2,
+    help="LR multiplier for gamma params in RUNG_learnable_gamma (default: 0.2).",
+)
+parser.add_argument(
+    "--gamma_reg_strength", type=float, default=0.0,
+    help="Gamma regularisation strength for RUNG_learnable_gamma (default: 0 = off).",
+)
+parser.add_argument(
     "--skip_clean", action="store_true",
     help="Skip the clean-training step (use previously saved models).",
 )
@@ -104,6 +120,14 @@ def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
     ]
     if script == "clean.py":
         cmd.append(f"--max_epoch={args.max_epoch}")
+        # Forward RUNG_learnable_gamma-specific args only when relevant.
+        # clean.py ignores unknown args gracefully via argparse defaults.
+        if model == "RUNG_learnable_gamma":
+            cmd += [
+                f"--gamma_init_strategy={args.gamma_init_strategy}",
+                f"--gamma_lr_factor={args.gamma_lr_factor}",
+                f"--gamma_reg_strength={args.gamma_reg_strength}",
+            ]
 
     t0     = time.perf_counter()
     result = subprocess.run(cmd, cwd=PROJECT_ROOT)

@@ -12,6 +12,7 @@ from model.mlp import MLP
 from model.att_func import get_l12_att_func, get_default_att_func, get_log_att_func, get_mask_att_func, get_step_p_norm_att_func, get_soft_step_l21_att_func, get_mcp_att_func, get_scad_att_func
 from model.penalty import PenaltyFunction
 from model.rung import RUNG
+from model.rung_learnable_gamma import RUNG_learnable_gamma
 
 
 # preprocessing for sontructing models
@@ -147,10 +148,31 @@ def get_model_default(
     elif model_name == 'RUNG_new_ADAPTIVE':
         w_func = PenaltyFunction.get_w_func('mcp', gamma)
         return _build_rung(w_func, penalty_flag='adaptive'), custom_fit_params
+    elif model_name == 'RUNG_learnable_gamma':
+        # Extract extra kwargs specific to RUNG_learnable_gamma; fall back to
+        # sensible defaults that mirror RUNG_new_SCAD where applicable.
+        gamma_init_strategy = custom_model_params.get('gamma_init_strategy', 'uniform')
+        scad_a              = custom_model_params.get('scad_a', 3.7)
+        prop_step           = custom_model_params.get('prop_step', 10)
+        dropout             = custom_model_params.get('dropout', 0.5)
+        lam_hat             = custom_model_params.get('lam_hat', 0.9)
+        model_lg = RUNG_learnable_gamma(
+            in_dim=D,
+            out_dim=C,
+            hidden_dims=[64],
+            lam_hat=lam_hat,
+            gamma_init=gamma,          # gamma from --gamma CLI arg (same scale as RUNG_new_SCAD)
+            gamma_init_strategy=gamma_init_strategy,
+            scad_a=scad_a,
+            prop_step=prop_step,
+            dropout=dropout,
+        ).to(device)
+        return model_lg, custom_fit_params
     else:
         raise ValueError(
             f"Unknown model_name '{model_name}'. "
             f"Valid choices: RUNG, RUNG_new, RUNG_new_SCAD, RUNG_new_L1, "
-            f"RUNG_new_L2, RUNG_new_ADAPTIVE, GCN, GAT, APPNP, L1, MLP."
+            f"RUNG_new_L2, RUNG_new_ADAPTIVE, RUNG_learnable_gamma, "
+            f"GCN, GAT, APPNP, L1, MLP."
         )
 

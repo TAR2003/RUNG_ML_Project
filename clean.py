@@ -5,6 +5,7 @@ sys.path.append("./")
 
 # models
 from train_eval_data.fit import fit
+from train_eval_data.fit_learnable_gamma import fit_learnable_gamma
 from exp.config.get_model_cora import get_model_default_cora
 from exp.config.get_model_citeseer import get_model_default_citeseer
 from exp.config.get_model import get_model_default
@@ -40,6 +41,19 @@ parser.add_argument('--penalty',type=str, default=None,
 parser.add_argument('--gamma',type=float, default=6.0)
 parser.add_argument('--data',type=str, default='cora')
 
+# RUNG_learnable_gamma specific arguments
+parser.add_argument('--gamma_init_strategy', type=str, default='uniform',
+                    choices=['uniform', 'decreasing', 'increasing'],
+                    help='How to initialise gamma across layers for RUNG_learnable_gamma. '
+                         'decreasing is theoretically motivated by shrinking feature '
+                         'differences with depth.')
+parser.add_argument('--gamma_lr_factor', type=float, default=0.2,
+                    help='LR multiplier for gamma parameters in RUNG_learnable_gamma. '
+                         'gamma_lr = lr * gamma_lr_factor. Recommended range: 0.05–0.5.')
+parser.add_argument('--gamma_reg_strength', type=float, default=0.0,
+                    help='Regularisation strength for gamma params in RUNG_learnable_gamma. '
+                         '0 = disabled. Try 0.01 if gammas diverge during training.')
+
 # fitting setting
 parser.add_argument('--lr',type=float, default=5e-2)
 parser.add_argument('--weight_decay',type=float, default=5e-4)
@@ -49,13 +63,15 @@ args = parser.parse_args()
 # Compound model names encode both model and norm (e.g. RUNG_new_SCAD).
 # Normalise them into separate args.model / args.norm before anything else.
 _COMPOUND_MODEL_MAP = {
-    'RUNG_new_SCAD':     ('RUNG_new', 'SCAD'),
-    'RUNG_new_L1':       ('RUNG_new', 'L1'),
-    'RUNG_new_L2':       ('RUNG_new', 'L2'),
-    'RUNG_new_ADAPTIVE': ('RUNG_new', 'ADAPTIVE'),
-    'RUNG_SCAD':         ('RUNG',     'SCAD'),
-    'RUNG_L1':           ('RUNG',     'L1'),
-    'RUNG_L2':           ('RUNG',     'L2'),
+    'RUNG_new_SCAD':         ('RUNG_new', 'SCAD'),
+    'RUNG_new_L1':           ('RUNG_new', 'L1'),
+    'RUNG_new_L2':           ('RUNG_new', 'L2'),
+    'RUNG_new_ADAPTIVE':     ('RUNG_new', 'ADAPTIVE'),
+    'RUNG_SCAD':             ('RUNG',     'SCAD'),
+    'RUNG_L1':               ('RUNG',     'L1'),
+    'RUNG_L2':               ('RUNG',     'L2'),
+    # RUNG_learnable_gamma is NOT mapped here — it is handled as a standalone
+    # model name in get_model_default and in the training dispatch below.
 }
 if args.model in _COMPOUND_MODEL_MAP:
     args.model, args.norm = _COMPOUND_MODEL_MAP[args.model]
@@ -90,6 +106,13 @@ def clean_rep(model, train_param, dataset_name, seed=None):
             cur_model.fit((A, X), y, train_idx, val_idx, progress=False, **train_param)
         elif args.model in ('RUNG', 'RUNG_new', 'MLP', 'L1', 'APPNP'):
             fit(cur_model, A, X, y, train_idx, val_idx, **train_param)
+        elif args.model == 'RUNG_learnable_gamma':
+            fit_learnable_gamma(
+                cur_model, A, X, y, train_idx, val_idx,
+                gamma_lr_factor=args.gamma_lr_factor,
+                gamma_reg_strength=args.gamma_reg_strength,
+                **train_param,
+            )
         
         cur_model.eval()
         acc.append(accuracy(cur_model(A, X)[test_idx, :], y[test_idx]).cpu().item())
@@ -103,8 +126,14 @@ def make_clean_model_and_save(do_save_model=False, do_save_acc=False, rep_num=5,
     
     # get model name
     
+    model_config = {'gamma': args.gamma, 'norm': args.norm}
+    # Pass RUNG_learnable_gamma-specific params into model config so
+    # get_model_default can forward them to the constructor.
+    if args.model == 'RUNG_learnable_gamma':
+        model_config['gamma_init_strategy'] = args.gamma_init_strategy
+
     model_ls = [
-        [args.model, {'gamma': args.gamma, 'norm': args.norm}, {'lr':args.lr, 'weight_decay':args.weight_decay,'max_epoch': args.max_epoch}], 
+        [args.model, model_config, {'lr':args.lr, 'weight_decay':args.weight_decay,'max_epoch': args.max_epoch}],
     ]
     
 
