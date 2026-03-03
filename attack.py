@@ -270,7 +270,7 @@ if __name__ == '__main__':
     get_model = get_model_default
     attack_name = "global_evasion_PGD"
 
-    for budget_ratio in [0.05, 0.1, 0.2, 0.3, 0.4, 0.7, 1.0, 1.5]:
+    for budget_ratio in [0.05, 0.1, 0.2, 0.3, 0.4, 0.6]:
         print(f"Budget: {budget_ratio}")
         model_params = {'gamma': args.gamma, 'norm': args.norm}
         run_global_evasion_adaptive_exp([[args.model, model_params, {'max_epoch': 300}]])
