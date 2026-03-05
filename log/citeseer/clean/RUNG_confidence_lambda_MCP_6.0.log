@@ -1,18 +1,15 @@
 
 Fit RUNG_confidence_lambda | lr=0.05, gamma_lr=0.01000, alpha_lr=0.00500, wd=0.0005, epochs=300
-  mode=protect_uncertain, normalize=True, warmup_epochs=50
+  mode=protect_uncertain, normalize=True, warmup_epochs=200
   gamma_reg=0.0, alpha_reg=0.001, patience=100, grad_clip=1.0
   Initial gammas: ['6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000']
   Initial alpha:  1.0000
 
-Phase 1: MLP warmup for 50 epochs (gamma + alpha frozen)
+Phase 1: MLP warmup for 200 epochs (gamma + alpha frozen)
 
   Epoch   50 | loss=0.1041 | val=0.6114 | α=1.000 | λ_std=0.1818 | λ-conf_corr=-1.000 | gammas=[6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00]
 
-Phase 2: Joint training (all params unfrozen)
-
-
-  Epoch  100 | loss=0.1321 | val=0.5924 | α=0.922 | λ_std=0.1618 | λ-conf_corr=-0.999 | gammas=[7.59, 5.46, 5.51, 4.84, 5.58, 5.29, 5.19, 5.42, 5.61, 6.67]
+  Epoch  100 | loss=0.1341 | val=0.6351 | α=1.000 | λ_std=0.1824 | λ-conf_corr=-1.000 | gammas=[6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00]
 
   Early stopping at epoch 106 (best val=0.7062 at epoch 5)
 
@@ -43,19 +40,16 @@ Training done. Best val acc: 0.7062 (epoch 5)
 Acc: [0.7411137819290161]
 
 Fit RUNG_confidence_lambda | lr=0.05, gamma_lr=0.01000, alpha_lr=0.00500, wd=0.0005, epochs=300
-  mode=protect_uncertain, normalize=True, warmup_epochs=50
+  mode=protect_uncertain, normalize=True, warmup_epochs=200
   gamma_reg=0.0, alpha_reg=0.001, patience=100, grad_clip=1.0
   Initial gammas: ['6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000']
   Initial alpha:  1.0000
 
-Phase 1: MLP warmup for 50 epochs (gamma + alpha frozen)
+Phase 1: MLP warmup for 200 epochs (gamma + alpha frozen)
 
   Epoch   50 | loss=0.1109 | val=0.6540 | α=1.000 | λ_std=0.1764 | λ-conf_corr=-1.000 | gammas=[6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00]
 
-Phase 2: Joint training (all params unfrozen)
-
-
-  Epoch  100 | loss=0.1617 | val=0.6114 | α=0.949 | λ_std=0.1754 | λ-conf_corr=-0.999 | gammas=[7.42, 5.81, 6.16, 5.66, 5.54, 5.87, 5.67, 5.87, 6.22, 6.71]
+  Epoch  100 | loss=0.1193 | val=0.6066 | α=1.000 | λ_std=0.1805 | λ-conf_corr=-1.000 | gammas=[6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00]
 
   Early stopping at epoch 105 (best val=0.6967 at epoch 4)
 
@@ -86,19 +80,16 @@ Training done. Best val acc: 0.6967 (epoch 4)
 Acc: [0.7411137819290161, 0.7517772912979126]
 
 Fit RUNG_confidence_lambda | lr=0.05, gamma_lr=0.01000, alpha_lr=0.00500, wd=0.0005, epochs=300
-  mode=protect_uncertain, normalize=True, warmup_epochs=50
+  mode=protect_uncertain, normalize=True, warmup_epochs=200
   gamma_reg=0.0, alpha_reg=0.001, patience=100, grad_clip=1.0
   Initial gammas: ['6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000']
   Initial alpha:  1.0000
 
-Phase 1: MLP warmup for 50 epochs (gamma + alpha frozen)
+Phase 1: MLP warmup for 200 epochs (gamma + alpha frozen)
 
   Epoch   50 | loss=0.1236 | val=0.6967 | α=1.000 | λ_std=0.1830 | λ-conf_corr=-1.000 | gammas=[6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00]
 
-Phase 2: Joint training (all params unfrozen)
-
-
-  Epoch  100 | loss=0.1344 | val=0.7251 | α=0.943 | λ_std=0.1808 | λ-conf_corr=-0.999 | gammas=[6.29, 5.50, 5.45, 5.97, 5.39, 5.67, 5.08, 5.95, 5.76, 7.30]
+  Epoch  100 | loss=0.0835 | val=0.6872 | α=1.000 | λ_std=0.1792 | λ-conf_corr=-1.000 | gammas=[6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00]
 
   Early stopping at epoch 107 (best val=0.7536 at epoch 6)
 
@@ -129,92 +120,84 @@ Training done. Best val acc: 0.7536 (epoch 6)
 Acc: [0.7411137819290161, 0.7517772912979126, 0.7233412861824036]
 
 Fit RUNG_confidence_lambda | lr=0.05, gamma_lr=0.01000, alpha_lr=0.00500, wd=0.0005, epochs=300
-  mode=protect_uncertain, normalize=True, warmup_epochs=50
+  mode=protect_uncertain, normalize=True, warmup_epochs=200
   gamma_reg=0.0, alpha_reg=0.001, patience=100, grad_clip=1.0
   Initial gammas: ['6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000']
   Initial alpha:  1.0000
 
-Phase 1: MLP warmup for 50 epochs (gamma + alpha frozen)
+Phase 1: MLP warmup for 200 epochs (gamma + alpha frozen)
 
   Epoch   50 | loss=0.0752 | val=0.6303 | α=1.000 | λ_std=0.1825 | λ-conf_corr=-1.000 | gammas=[6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00]
 
-Phase 2: Joint training (all params unfrozen)
+  Epoch  100 | loss=0.0752 | val=0.6588 | α=1.000 | λ_std=0.1924 | λ-conf_corr=-1.000 | gammas=[6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00]
 
+  Early stopping at epoch 104 (best val=0.7109 at epoch 3)
 
-  Epoch  100 | loss=0.1423 | val=0.6919 | α=0.933 | λ_std=0.1869 | λ-conf_corr=-0.999 | gammas=[6.89, 5.01, 5.88, 5.57, 5.55, 5.91, 5.61, 6.32, 6.26, 6.24]
-
-  Epoch  150 | loss=0.1612 | val=0.6588 | α=0.888 | λ_std=0.1966 | λ-conf_corr=-0.998 | gammas=[8.01, 4.77, 6.09, 5.27, 5.24, 6.03, 5.38, 6.64, 7.17, 6.91]
-
-  Early stopping at epoch 192 (best val=0.7346 at epoch 91)
-
-Training done. Best val acc: 0.7346 (epoch 91)
+Training done. Best val acc: 0.7109 (epoch 3)
 
 ==========================================================
        RUNG_confidence_lambda — Gamma + Alpha Stats       
 ==========================================================
   confidence_mode:  protect_uncertain
   normalize_lambda: True
-  alpha:            0.9443
+  alpha:            1.0000
   lambda_base:      0.1111
 
     Layer       lam   gamma(=a*lam)    log_lam
   ------------------------------------------------
-        0      1.7627            6.5221       0.5669
-        1      1.3504            4.9965       0.3004
-        2      1.5631            5.7836       0.4467
-        3      1.5065            5.5742       0.4098
-        4      1.5107            5.5898       0.4126
-        5      1.5601            5.7723       0.4447
-        6      1.5159            5.6090       0.4160
-        7      1.6240            6.0088       0.4849
-        8      1.6185            5.9884       0.4815
-        9      1.6880            6.2455       0.5235
+        0      1.6216            6.0000       0.4834
+        1      1.6216            6.0000       0.4834
+        2      1.6216            6.0000       0.4834
+        3      1.6216            6.0000       0.4834
+        4      1.6216            6.0000       0.4834
+        5      1.6216            6.0000       0.4834
+        6      1.6216            6.0000       0.4834
+        7      1.6216            6.0000       0.4834
+        8      1.6216            6.0000       0.4834
+        9      1.6216            6.0000       0.4834
 ==========================================================
 
-Acc: [0.7411137819290161, 0.7517772912979126, 0.7233412861824036, 0.6824644804000854]
+Acc: [0.7411137819290161, 0.7517772912979126, 0.7233412861824036, 0.7422986030578613]
 
 Fit RUNG_confidence_lambda | lr=0.05, gamma_lr=0.01000, alpha_lr=0.00500, wd=0.0005, epochs=300
-  mode=protect_uncertain, normalize=True, warmup_epochs=50
+  mode=protect_uncertain, normalize=True, warmup_epochs=200
   gamma_reg=0.0, alpha_reg=0.001, patience=100, grad_clip=1.0
   Initial gammas: ['6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000', '6.000']
   Initial alpha:  1.0000
 
-Phase 1: MLP warmup for 50 epochs (gamma + alpha frozen)
+Phase 1: MLP warmup for 200 epochs (gamma + alpha frozen)
 
   Epoch   50 | loss=0.0774 | val=0.6825 | α=1.000 | λ_std=0.1720 | λ-conf_corr=-1.000 | gammas=[6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00]
 
-Phase 2: Joint training (all params unfrozen)
+  Epoch  100 | loss=0.1601 | val=0.6919 | α=1.000 | λ_std=0.1932 | λ-conf_corr=-1.000 | gammas=[6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00]
 
+  Epoch  150 | loss=0.1602 | val=0.6588 | α=1.000 | λ_std=0.1736 | λ-conf_corr=-1.000 | gammas=[6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00, 6.00]
 
-  Epoch  100 | loss=0.0424 | val=0.6825 | α=0.946 | λ_std=0.1851 | λ-conf_corr=-0.999 | gammas=[7.32, 5.30, 4.69, 4.94, 4.41, 5.32, 4.64, 5.86, 5.71, 6.05]
+  Early stopping at epoch 186 (best val=0.7536 at epoch 85)
 
-  Epoch  150 | loss=0.0962 | val=0.6825 | α=0.887 | λ_std=0.1743 | λ-conf_corr=-0.998 | gammas=[8.25, 5.47, 4.10, 3.78, 3.07, 5.87, 3.21, 7.59, 6.61, 7.34]
-
-  Early stopping at epoch 193 (best val=0.7536 at epoch 92)
-
-Training done. Best val acc: 0.7536 (epoch 92)
+Training done. Best val acc: 0.7536 (epoch 85)
 
 ==========================================================
        RUNG_confidence_lambda — Gamma + Alpha Stats       
 ==========================================================
   confidence_mode:  protect_uncertain
   normalize_lambda: True
-  alpha:            0.9529
+  alpha:            1.0000
   lambda_base:      0.1111
 
     Layer       lam   gamma(=a*lam)    log_lam
   ------------------------------------------------
-        0      1.9482            7.2084       0.6669
-        1      1.4606            5.4044       0.3789
-        2      1.3009            4.8132       0.2630
-        3      1.3707            5.0716       0.3153
-        4      1.2419            4.5951       0.2167
-        5      1.4535            5.3779       0.3740
-        6      1.3136            4.8604       0.2728
-        7      1.5655            5.7925       0.4482
-        8      1.5525            5.7443       0.4399
-        9      1.6108            5.9598       0.4767
+        0      1.6216            6.0000       0.4834
+        1      1.6216            6.0000       0.4834
+        2      1.6216            6.0000       0.4834
+        3      1.6216            6.0000       0.4834
+        4      1.6216            6.0000       0.4834
+        5      1.6216            6.0000       0.4834
+        6      1.6216            6.0000       0.4834
+        7      1.6216            6.0000       0.4834
+        8      1.6216            6.0000       0.4834
+        9      1.6216            6.0000       0.4834
 ==========================================================
 
-Acc: [0.7411137819290161, 0.7517772912979126, 0.7233412861824036, 0.6824644804000854, 0.7031990885734558]
-model RUNG_confidence_lambda done, clean acc: 0.7203791856765747±0.025128546199263954
+Acc: [0.7411137819290161, 0.7517772912979126, 0.7233412861824036, 0.7422986030578613, 0.701421856880188]
+model RUNG_confidence_lambda done, clean acc: 0.7319905638694764±0.017834008038035008
