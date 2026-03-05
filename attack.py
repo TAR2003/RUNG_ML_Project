@@ -47,6 +47,13 @@ parser.add_argument('--penalty',type=str, default=None,
                          'If set, overrides --norm for RUNG models.')
 parser.add_argument('--gamma',type=float, default=6.0)
 parser.add_argument('--data',type=str, default='cora')
+parser.add_argument('--percentile_q', type=float, default=0.75,
+                    help='Percentile q for RUNG_percentile_gamma (default: 0.75).')
+parser.add_argument('--use_layerwise_q', type=lambda x: x.lower() != 'false',
+                    default=False,
+                    help='Layerwise q for RUNG_percentile_gamma (default: False).')
+parser.add_argument('--percentile_q_late', type=float, default=0.65,
+                    help='Late-layer percentile q for RUNG_percentile_gamma (default: 0.65).')
 
 args = parser.parse_args()
 # Compound model names encode both model and norm (e.g. RUNG_new_SCAD).
@@ -273,6 +280,10 @@ if __name__ == '__main__':
     for budget_ratio in [0.05, 0.1, 0.2, 0.3, 0.4, 0.6]:
         print(f"Budget: {budget_ratio}")
         model_params = {'gamma': args.gamma, 'norm': args.norm}
+        if args.model == 'RUNG_percentile_gamma':
+            model_params['percentile_q']      = args.percentile_q
+            model_params['use_layerwise_q']   = args.use_layerwise_q
+            model_params['percentile_q_late'] = args.percentile_q_late
         run_global_evasion_adaptive_exp([[args.model, model_params, {'max_epoch': 300}]])
     
     sys.stdout.close()

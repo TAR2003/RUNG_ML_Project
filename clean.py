@@ -7,6 +7,7 @@ sys.path.append("./")
 from train_eval_data.fit import fit
 from train_eval_data.fit_learnable_gamma import fit_learnable_gamma
 from train_eval_data.fit_confidence_lambda import fit_confidence_lambda
+from train_eval_data.fit_percentile_gamma import fit_percentile_gamma
 from exp.config.get_model_cora import get_model_default_cora
 from exp.config.get_model_citeseer import get_model_default_citeseer
 from exp.config.get_model import get_model_default
@@ -81,6 +82,20 @@ parser.add_argument('--warmup_epochs', type=int, default=50,
                          'Ensures MLP confidences are meaningful before calibration. '
                          'Set to 0 to disable warmup.')
 
+# RUNG_percentile_gamma specific arguments
+parser.add_argument('--percentile_q', type=float, default=0.75,
+                    help='Percentile for gamma computation in RUNG_percentile_gamma. '
+                         'gamma^(k) = quantile(y_edges^(k), percentile_q). '
+                         'Range (0, 1). Higher = lighter pruning. '
+                         'Recommended search: 0.50, 0.60, 0.75, 0.85, 0.90, 0.95.')
+parser.add_argument('--use_layerwise_q', type=lambda x: x.lower() != 'false',
+                    default=False,
+                    help='If True, use different percentile_q for early vs late layers. '
+                         'Early layers use --percentile_q; late layers use --percentile_q_late.')
+parser.add_argument('--percentile_q_late', type=float, default=0.65,
+                    help='Percentile q for late layers when use_layerwise_q=True. '
+                         'Should be <= percentile_q for more aggressive late-layer pruning.')
+
 # fitting setting
 parser.add_argument('--lr',type=float, default=5e-2)
 parser.add_argument('--weight_decay',type=float, default=5e-4)
@@ -150,6 +165,11 @@ def clean_rep(model, train_param, dataset_name, seed=None):
                 warmup_epochs=args.warmup_epochs,
                 **train_param,
             )
+        elif args.model == 'RUNG_percentile_gamma':
+            fit_percentile_gamma(
+                cur_model, A, X, y, train_idx, val_idx,
+                **train_param,
+            )
         
         cur_model.eval()
         acc.append(accuracy(cur_model(A, X)[test_idx, :], y[test_idx]).cpu().item())
@@ -174,6 +194,11 @@ def make_clean_model_and_save(do_save_model=False, do_save_acc=False, rep_num=5,
         model_config['alpha_init']          = args.alpha_init
         model_config['confidence_mode']     = args.confidence_mode
         model_config['normalize_lambda']    = args.normalize_lambda
+    # Pass RUNG_percentile_gamma-specific params into model config.
+    elif args.model == 'RUNG_percentile_gamma':
+        model_config['percentile_q']      = args.percentile_q
+        model_config['use_layerwise_q']   = args.use_layerwise_q
+        model_config['percentile_q_late'] = args.percentile_q_late
 
     model_ls = [
         [args.model, model_config, {'lr':args.lr, 'weight_decay':args.weight_decay,'max_epoch': args.max_epoch}],

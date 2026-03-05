@@ -99,6 +99,37 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--percentile_q",
+    type=float,
+    default=0.75,
+    help=(
+        "Percentile for gamma computation in RUNG_percentile_gamma. "
+        "gamma^(k) = quantile(y_edges^(k), percentile_q). "
+        "Range (0, 1). Higher = lighter pruning. "
+        "Recommended search: 0.50, 0.60, 0.75, 0.85, 0.90, 0.95. "
+        "Start with 0.75."
+    ),
+)
+parser.add_argument(
+    "--use_layerwise_q",
+    type=lambda x: x.lower() != 'false',
+    default=False,
+    help=(
+        "If True, use different percentile_q for early vs late layers. "
+        "Early layers (first half) use --percentile_q. "
+        "Late layers (second half) use --percentile_q_late."
+    ),
+)
+parser.add_argument(
+    "--percentile_q_late",
+    type=float,
+    default=0.65,
+    help=(
+        "Percentile q for late layers when use_layerwise_q=True. "
+        "Should be <= percentile_q. Default 0.65."
+    ),
+)
+parser.add_argument(
     "--alpha_init", type=float, default=1.0,
     help="Initial alpha sharpness for RUNG_confidence_lambda (default: 1.0).",
 )
@@ -175,6 +206,12 @@ def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
                 f"--alpha_lr_factor={args.alpha_lr_factor}",
                 f"--alpha_reg_strength={args.alpha_reg_strength}",
                 f"--warmup_epochs={args.warmup_epochs}",
+            ]
+        elif model == "RUNG_percentile_gamma":
+            cmd += [
+                f"--percentile_q={args.percentile_q}",
+                f"--use_layerwise_q={args.use_layerwise_q}",
+                f"--percentile_q_late={args.percentile_q_late}",
             ]
     t0 = time.perf_counter()
     proc = subprocess.run(cmd, cwd=str(PROJECT_ROOT))
