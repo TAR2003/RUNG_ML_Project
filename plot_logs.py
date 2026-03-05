@@ -301,6 +301,56 @@ for dataset in all_datasets:
     plt.close(fig)
     print(f"  Saved: {out_path}")
 
+    # --- Pairwise RUNG vs other model plots ---
+    rung_label = None
+    for label in all_labels:
+        if label.startswith("RUNG"):
+            rung_label = label
+            break
+    if rung_label:
+        for other_label in all_labels:
+            if other_label == rung_label:
+                continue
+            # Plot RUNG and other_label together
+            fig, ax = plt.subplots(figsize=(8, 5))
+            ax.set_title(f"Robustness: {dataset} — {rung_label} vs {other_label}", fontsize=13, pad=10)
+            ax.set_xlabel("Attack budget (fraction of edges)", fontsize=11)
+            ax.set_ylabel("Accuracy", fontsize=11)
+            ax.grid(True, linestyle="--", alpha=0.4)
+
+            for idx, label in enumerate([rung_label, other_label]):
+                budgets_dict = a_data[label]
+                budgets_sorted = sorted(budgets_dict.keys())
+                first_budget_data = budgets_dict[budgets_sorted[0]]
+                clean_mean = first_budget_data["clean_mean"]
+                clean_std  = first_budget_data["clean_std"]
+                if label in c_data:
+                    cm, cs = c_data[label]
+                    clean_mean, clean_std = cm, cs
+                xs     = [0.0]       + budgets_sorted
+                means  = [clean_mean]  + [budgets_dict[b]["atk_mean"] for b in budgets_sorted]
+                stds   = [clean_std]   + [budgets_dict[b]["atk_std"]  for b in budgets_sorted]
+                color = _color(idx)
+                ax.plot(xs, means, marker="o", linewidth=2, label=label, color=color)
+                ax.fill_between(
+                    xs,
+                    [m - s for m, s in zip(means, stds)],
+                    [m + s for m, s in zip(means, stds)],
+                    alpha=0.15,
+                    color=color,
+                )
+            ax.set_xlim(left=-0.01)
+            ax.set_ylim(bottom=0.0, top=1.05)
+            ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
+            ax.legend(loc="upper right", fontsize=9, framealpha=0.9)
+            fig.tight_layout()
+            safe_other = other_label.replace(" ", "_").replace("/", "_").replace("(", "").replace(")", "").replace(",", "").replace("=", "").replace("γ", "gamma")
+            safe_rung = rung_label.replace(" ", "_").replace("/", "_").replace("(", "").replace(")", "").replace(",", "").replace("=", "").replace("γ", "gamma")
+            out_path = OUT_DIR / f"robustness_{dataset}_{safe_rung}_vs_{safe_other}.png"
+            fig.savefig(out_path, dpi=args.dpi)
+            plt.close(fig)
+            print(f"  Saved: {out_path}")
+
 
 # ---------------------------------------------------------------------------
 # Figure 2: clean accuracy bar chart (all datasets × all models)
