@@ -16,6 +16,7 @@ from model.rung_learnable_gamma import RUNG_learnable_gamma
 from model.rung_parametric_gamma import RUNG_parametric_gamma
 from model.rung_confidence_lambda import RUNG_confidence_lambda
 from model.rung_percentile_gamma import RUNG_percentile_gamma
+from model.rung_learnable_distance import RUNG_learnable_distance
 
 
 # preprocessing for sontructing models
@@ -241,12 +242,40 @@ def get_model_default(
             dropout           = dropout,
         ).to(device)
         return model_pg, custom_fit_params
+    elif model_name == 'RUNG_learnable_distance':
+        # RUNG with configurable distance metric for edge suspiciousness.
+        # Replaces hardcoded Euclidean distance with cosine, projection, or bilinear.
+        # Extends RUNG_percentile_gamma with DistanceModule.
+        scad_a             = custom_model_params.get('scad_a', 3.7)
+        prop_step          = custom_model_params.get('prop_step', 10)
+        dropout            = custom_model_params.get('dropout', 0.5)
+        lam_hat            = custom_model_params.get('lam_hat', 0.9)
+        percentile_q       = custom_model_params.get('percentile_q', 0.75)
+        use_layerwise_q    = custom_model_params.get('use_layerwise_q', False)
+        percentile_q_late  = custom_model_params.get('percentile_q_late', 0.65)
+        distance_mode      = custom_model_params.get('distance_mode', 'cosine')
+        proj_dim           = custom_model_params.get('proj_dim', 32)
+        model_ld = RUNG_learnable_distance(
+            in_dim            = D,
+            out_dim           = C,
+            hidden_dims       = [64],
+            lam_hat           = lam_hat,
+            percentile_q      = percentile_q,
+            use_layerwise_q   = use_layerwise_q,
+            percentile_q_late = percentile_q_late,
+            distance_mode     = distance_mode,
+            proj_dim          = proj_dim,
+            scad_a            = scad_a,
+            prop_step         = prop_step,
+            dropout           = dropout,
+        ).to(device)
+        return model_ld, custom_fit_params
     else:
         raise ValueError(
             f"Unknown model_name '{model_name}'. "
             f"Valid choices: RUNG, RUNG_new, RUNG_new_SCAD, RUNG_new_L1, "
             f"RUNG_new_L2, RUNG_new_ADAPTIVE, RUNG_learnable_gamma, "
             f"RUNG_parametric_gamma, RUNG_confidence_lambda, RUNG_percentile_gamma, "
-            f"GCN, GAT, APPNP, L1, MLP."
+            f"RUNG_learnable_distance, GCN, GAT, APPNP, L1, MLP."
         )
 

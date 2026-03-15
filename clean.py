@@ -9,6 +9,7 @@ from train_eval_data.fit_learnable_gamma import fit_learnable_gamma
 from train_eval_data.fit_parametric_gamma import fit_parametric_gamma
 from train_eval_data.fit_confidence_lambda import fit_confidence_lambda
 from train_eval_data.fit_percentile_gamma import fit_percentile_gamma
+from train_eval_data.fit_learnable_distance import fit_learnable_distance
 from exp.config.get_model_cora import get_model_default_cora
 from exp.config.get_model_citeseer import get_model_default_citeseer
 from exp.config.get_model import get_model_default
@@ -106,6 +107,21 @@ parser.add_argument('--percentile_q_late', type=float, default=0.65,
                     help='Percentile q for late layers when use_layerwise_q=True. '
                          'Should be <= percentile_q for more aggressive late-layer pruning.')
 
+# RUNG_learnable_distance specific arguments
+parser.add_argument('--distance_mode', type=str, default='cosine',
+                    choices=['cosine', 'projection', 'bilinear'],
+                    help='Distance metric for edge suspiciousness in RUNG_learnable_distance. '
+                         'cosine: 0 parameters, scale-invariant (start here). '
+                         'projection: learnable MLP projection. '
+                         'bilinear: learnable linear projection.')
+parser.add_argument('--proj_dim', type=int, default=32,
+                    help='Projection dimension for projection/bilinear distance modes. '
+                         'Ignored for cosine mode.')
+parser.add_argument('--dist_lr_factor', type=float, default=0.5,
+                    help='LR multiplier for distance module parameters in RUNG_learnable_distance. '
+                         'Only used if distance_mode is projection or bilinear. '
+                         'Default 0.5 = distance LR is half of base LR.')
+
 # fitting setting
 parser.add_argument('--lr',type=float, default=5e-2)
 parser.add_argument('--weight_decay',type=float, default=5e-4)
@@ -187,6 +203,12 @@ def clean_rep(model, train_param, dataset_name, seed=None):
                 cur_model, A, X, y, train_idx, val_idx,
                 **train_param,
             )
+        elif args.model == 'RUNG_learnable_distance':
+            fit_learnable_distance(
+                cur_model, A, X, y, train_idx, val_idx,
+                dist_lr_factor=args.dist_lr_factor,
+                **train_param,
+            )
         
         cur_model.eval()
         acc.append(accuracy(cur_model(A, X)[test_idx, :], y[test_idx]).cpu().item())
@@ -219,6 +241,13 @@ def make_clean_model_and_save(do_save_model=False, do_save_acc=False, rep_num=5,
         model_config['percentile_q']      = args.percentile_q
         model_config['use_layerwise_q']   = args.use_layerwise_q
         model_config['percentile_q_late'] = args.percentile_q_late
+    # Pass RUNG_learnable_distance-specific params into model config.
+    elif args.model == 'RUNG_learnable_distance':
+        model_config['percentile_q']      = args.percentile_q
+        model_config['use_layerwise_q']   = args.use_layerwise_q
+        model_config['percentile_q_late'] = args.percentile_q_late
+        model_config['distance_mode']     = args.distance_mode
+        model_config['proj_dim']          = args.proj_dim
 
     model_ls = [
         [args.model, model_config, {'lr':args.lr, 'weight_decay':args.weight_decay,'max_epoch': args.max_epoch}],
