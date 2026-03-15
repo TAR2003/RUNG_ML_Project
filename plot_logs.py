@@ -327,6 +327,13 @@ if not attack_data and not clean_data:
 
 print()  # blank line before figures section
 
+# Optional per-dataset comparison model list (one model match per line).
+# If present, an extra figure is generated for each dataset showing only
+# those models that match the list.
+COMPARE_MODELS_PATH = Path("compare_models.txt")
+# `compare_models` is populated after the helper functions are defined.
+compare_models: list[str] = []
+
 # ---------------------------------------------------------------------------
 # Colour palette (cycles automatically for many models)
 # ---------------------------------------------------------------------------
@@ -347,6 +354,32 @@ PALETTE = [
 def _color(i: int) -> str:
     return PALETTE[i % len(PALETTE)]
 
+
+def _read_compare_list(path: Path) -> list[str]:
+    """Read optional list of model name filters for additional comparison plots."""
+    if not path.exists():
+        return []
+    lines = [l.strip() for l in path.read_text(errors="replace").splitlines()]
+    return [l for l in lines if l and not l.startswith("#")]
+
+
+def _filter_labels(labels: list[str], queries: list[str]) -> list[str]:
+    """Return subset of labels that match any query (case-insensitive substring)."""
+    if not queries:
+        return []
+    out = []
+    for lbl in labels:
+        lower = lbl.lower()
+        if any(q.lower() in lower for q in queries):
+            out.append(lbl)
+    return out
+
+
+# Read optional compare list (one model pattern per line).
+# When present, an extra per-dataset plot is generated showing only these models.
+compare_models = _read_compare_list(COMPARE_MODELS_PATH)
+if compare_models:
+    print(f"Using compare list from '{COMPARE_MODELS_PATH}': {compare_models}")
 
 # ---------------------------------------------------------------------------
 # Figure 1: per-dataset robustness curves
@@ -405,13 +438,61 @@ for dataset in all_datasets:
     ax.set_xlim(left=-0.01)
     ax.set_ylim(bottom=0.0, top=1.05)
     ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
-    ax.legend(loc="upper right", fontsize=9, framealpha=0.9)
+    ax.legend(loc="lower right", fontsize=7, framealpha=0.9)
     fig.tight_layout()
 
     out_path = OUT_DIR / f"robustness_{dataset}.png"
     fig.savefig(out_path, dpi=args.dpi)
     plt.close(fig)
     print(f"  Saved: {out_path}")
+
+    # --- Optional compare-list figure (per-dataset) ---
+    if compare_models:
+        filtered_labels = _filter_labels(all_labels, compare_models)
+        if filtered_labels:
+            fig, ax = plt.subplots(figsize=(8, 5))
+            ax.set_title(f"Robustness (compare list) — {dataset}", fontsize=13, pad=10)
+            ax.set_xlabel("Attack budget (fraction of edges)", fontsize=11)
+            ax.set_ylabel("Accuracy", fontsize=11)
+            ax.grid(True, linestyle="--", alpha=0.4)
+
+            for idx, label in enumerate(filtered_labels):
+                budgets_dict = a_data[label]
+                budgets_sorted = sorted(budgets_dict.keys())
+
+                first_budget_data = budgets_dict[budgets_sorted[0]]
+                clean_mean = first_budget_data["clean_mean"]
+                clean_std  = first_budget_data["clean_std"]
+                if label in c_data:
+                    cm, cs = c_data[label]
+                    clean_mean, clean_std = cm, cs
+
+                xs     = [0.0]       + budgets_sorted
+                means  = [clean_mean]  + [budgets_dict[b]["atk_mean"] for b in budgets_sorted]
+                stds   = [clean_std]   + [budgets_dict[b]["atk_std"]  for b in budgets_sorted]
+
+                color = _color(idx)
+                ax.plot(xs, means, marker="o", linewidth=2, label=label, color=color)
+                ax.fill_between(
+                    xs,
+                    [m - s for m, s in zip(means, stds)],
+                    [m + s for m, s in zip(means, stds)],
+                    alpha=0.15,
+                    color=color,
+                )
+
+            ax.set_xlim(left=-0.01)
+            ax.set_ylim(bottom=0.0, top=1.05)
+            ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
+            ax.legend(loc="lower right", fontsize=6, framealpha=0.9)
+            fig.tight_layout()
+
+            out_path = OUT_DIR / f"robustness_{dataset}_compare.png"
+            fig.savefig(out_path, dpi=args.dpi)
+            plt.close(fig)
+            print(f"  Saved: {out_path}")
+        else:
+            print(f"  [compare] {dataset}: no models matched compare list (skipped)")
 
     # --- Pairwise RUNG vs other model plots ---
     rung_label = None
@@ -454,7 +535,7 @@ for dataset in all_datasets:
             ax.set_xlim(left=-0.01)
             ax.set_ylim(bottom=0.0, top=1.05)
             ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
-            ax.legend(loc="upper right", fontsize=9, framealpha=0.9)
+            ax.legend(loc="lower right", fontsize=7, framealpha=0.9)
             fig.tight_layout()
             safe_other = other_label.replace(" ", "_").replace("/", "_").replace("(", "").replace(")", "").replace(",", "").replace("=", "").replace("γ", "gamma")
             safe_rung = rung_label.replace(" ", "_").replace("/", "_").replace("(", "").replace(")", "").replace(",", "").replace("=", "").replace("γ", "gamma")
@@ -537,7 +618,7 @@ if has_any:
                     ha="center", va="bottom", fontsize=7, rotation=90,
                 )
 
-    ax.legend(loc="lower right", fontsize=8, framealpha=0.9)
+    ax.legend(loc="lower right", fontsize=7, framealpha=0.9)
     fig.tight_layout()
 
     out_path = OUT_DIR / "clean_accuracy.png"
@@ -595,7 +676,7 @@ if len(datasets_with_attack) > 1:
         ax.set_xlim(left=-0.01)
         ax.set_ylim(0.0, 1.05)
         ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
-        ax.legend(fontsize=7, framealpha=0.9)
+        ax.legend(loc="lower right", fontsize=6, framealpha=0.9)
 
     # hide unused axes
     for ax_idx in range(len(datasets_with_attack), nrows * ncols):

@@ -55,6 +55,17 @@ parser.add_argument('--use_layerwise_q', type=lambda x: x.lower() != 'false',
 parser.add_argument('--percentile_q_late', type=float, default=0.65,
                     help='Late-layer percentile q for RUNG_percentile_gamma (default: 0.65).')
 
+# RUNG_learnable_distance specific arguments
+parser.add_argument('--distance_mode', type=str, default='cosine',
+                    choices=['cosine', 'projection', 'bilinear'],
+                    help='Distance metric for RUNG_learnable_distance (default: cosine).')
+parser.add_argument('--proj_dim', type=int, default=32,
+                    help='Projection dimension for projection/bilinear modes (default: 32).')
+parser.add_argument('--dist_lr_factor', type=float, default=0.5,
+                    help='LR multiplier for distance module (default: 0.5).')
+parser.add_argument('--budgets', type=float, nargs='+', default=[0.05, 0.1, 0.2, 0.3, 0.4, 0.6],
+                    help='Attack budgets to evaluate (default: 0.05 0.1 0.2 0.3 0.4 0.6).')
+
 args = parser.parse_args()
 # Compound model names encode both model and norm (e.g. RUNG_new_SCAD).
 # Normalise them into separate args.model / args.norm before anything else.
@@ -277,13 +288,19 @@ if __name__ == '__main__':
     get_model = get_model_default
     attack_name = "global_evasion_PGD"
 
-    for budget_ratio in [0.05, 0.1, 0.2, 0.3, 0.4, 0.6]:
+    for budget_ratio in args.budgets:
         print(f"Budget: {budget_ratio}")
         model_params = {'gamma': args.gamma, 'norm': args.norm}
         if args.model == 'RUNG_percentile_gamma':
             model_params['percentile_q']      = args.percentile_q
             model_params['use_layerwise_q']   = args.use_layerwise_q
             model_params['percentile_q_late'] = args.percentile_q_late
+        elif args.model == 'RUNG_learnable_distance':
+            model_params['percentile_q']      = args.percentile_q
+            model_params['use_layerwise_q']   = args.use_layerwise_q
+            model_params['percentile_q_late'] = args.percentile_q_late
+            model_params['distance_mode']     = args.distance_mode
+            model_params['proj_dim']          = args.proj_dim
         run_global_evasion_adaptive_exp([[args.model, model_params, {'max_epoch': 300}]])
     
     sys.stdout.close()
