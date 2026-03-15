@@ -89,6 +89,14 @@ parser.add_argument(
     help="Gamma regularisation strength for RUNG_learnable_gamma (default: 0 = off).",
 )
 parser.add_argument(
+    "--decay_rate_init", type=float, default=0.85,
+    help="Initial decay rate per layer for RUNG_parametric_gamma (default: 0.85).",
+)
+parser.add_argument(
+    "--decay_rate_reg_strength", type=float, default=0.0,
+    help="Decay rate regularisation for RUNG_parametric_gamma (default: 0.0).",
+)
+parser.add_argument(
     "--confidence_mode", type=str, default="protect_uncertain",
     choices=["protect_uncertain", "protect_confident", "symmetric"],
     help=(
@@ -194,7 +202,13 @@ def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
                 f"--gamma_init_strategy={args.gamma_init_strategy}",
                 f"--gamma_lr_factor={args.gamma_lr_factor}",
                 f"--gamma_reg_strength={args.gamma_reg_strength}",
-            ]
+            ]        
+        elif model == "RUNG_parametric_gamma":
+            cmd += [
+                f"--decay_rate_init={args.decay_rate_init}",
+                f"--gamma_lr_factor={args.gamma_lr_factor}",
+                f"--decay_rate_reg_strength={args.decay_rate_reg_strength}",
+            ]        
         elif model == "RUNG_confidence_lambda":
             cmd += [
                 f"--gamma_init_strategy={args.gamma_init_strategy}",

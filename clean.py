@@ -6,6 +6,7 @@ sys.path.append("./")
 # models
 from train_eval_data.fit import fit
 from train_eval_data.fit_learnable_gamma import fit_learnable_gamma
+from train_eval_data.fit_parametric_gamma import fit_parametric_gamma
 from train_eval_data.fit_confidence_lambda import fit_confidence_lambda
 from train_eval_data.fit_percentile_gamma import fit_percentile_gamma
 from exp.config.get_model_cora import get_model_default_cora
@@ -55,6 +56,15 @@ parser.add_argument('--gamma_lr_factor', type=float, default=0.2,
 parser.add_argument('--gamma_reg_strength', type=float, default=0.0,
                     help='Regularisation strength for gamma params in RUNG_learnable_gamma. '
                          '0 = disabled. Try 0.01 if gammas diverge during training.')
+
+# RUNG_parametric_gamma specific arguments
+parser.add_argument('--decay_rate_init', type=float, default=0.85,
+                    help='Initial gamma decay rate per layer for RUNG_parametric_gamma. '
+                         '0.85 means gamma shrinks by 15%% per layer. Range (0,1). '
+                         'Typical search: 0.70, 0.80, 0.85, 0.90, 0.95.')
+parser.add_argument('--decay_rate_reg_strength', type=float, default=0.0,
+                    help='Regularisation strength for decay_rate in RUNG_parametric_gamma. '
+                         '0 = disabled. Try 0.01 if decay_rate diverges during training.')
 
 # RUNG_confidence_lambda specific arguments
 parser.add_argument('--alpha_init', type=float, default=1.0,
@@ -155,6 +165,13 @@ def clean_rep(model, train_param, dataset_name, seed=None):
                 gamma_reg_strength=args.gamma_reg_strength,
                 **train_param,
             )
+        elif args.model == 'RUNG_parametric_gamma':
+            fit_parametric_gamma(
+                cur_model, A, X, y, train_idx, val_idx,
+                gamma_lr_factor=args.gamma_lr_factor,
+                gamma_reg_strength=args.gamma_reg_strength,
+                **train_param,
+            )
         elif args.model == 'RUNG_confidence_lambda':
             fit_confidence_lambda(
                 cur_model, A, X, y, train_idx, val_idx,
@@ -188,6 +205,9 @@ def make_clean_model_and_save(do_save_model=False, do_save_acc=False, rep_num=5,
     # get_model_default can forward them to the constructor.
     if args.model == 'RUNG_learnable_gamma':
         model_config['gamma_init_strategy'] = args.gamma_init_strategy
+    # Pass RUNG_parametric_gamma-specific params into model config.
+    elif args.model == 'RUNG_parametric_gamma':
+        model_config['decay_rate_init'] = args.decay_rate_init
     # Pass RUNG_confidence_lambda-specific params into model config.
     elif args.model == 'RUNG_confidence_lambda':
         model_config['gamma_init_strategy'] = args.gamma_init_strategy

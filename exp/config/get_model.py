@@ -13,6 +13,7 @@ from model.att_func import get_l12_att_func, get_default_att_func, get_log_att_f
 from model.penalty import PenaltyFunction
 from model.rung import RUNG
 from model.rung_learnable_gamma import RUNG_learnable_gamma
+from model.rung_parametric_gamma import RUNG_parametric_gamma
 from model.rung_confidence_lambda import RUNG_confidence_lambda
 from model.rung_percentile_gamma import RUNG_percentile_gamma
 
@@ -168,6 +169,28 @@ def get_model_default(
             dropout=dropout,
         ).to(device)
         return model_lg, custom_fit_params
+    elif model_name == 'RUNG_parametric_gamma':
+        # RUNG with 2-parameter exponential gamma decay schedule.
+        # Replaces K separate log_lam parameters with:
+        #   gamma^(k) = gamma_0 * decay_rate^k
+        # This gives stronger gradient signals and more stable training.
+        decay_rate_init     = custom_model_params.get('decay_rate_init', 0.85)
+        scad_a              = custom_model_params.get('scad_a', 3.7)
+        prop_step           = custom_model_params.get('prop_step', 10)
+        dropout             = custom_model_params.get('dropout', 0.5)
+        lam_hat             = custom_model_params.get('lam_hat', 0.9)
+        model_pg_param = RUNG_parametric_gamma(
+            in_dim=D,
+            out_dim=C,
+            hidden_dims=[64],
+            lam_hat=lam_hat,
+            gamma_0_init=gamma,        # gamma from --gamma CLI arg (same scale as RUNG_new_SCAD)
+            decay_rate_init=decay_rate_init,
+            scad_a=scad_a,
+            prop_step=prop_step,
+            dropout=dropout,
+        ).to(device)
+        return model_pg_param, custom_fit_params
     elif model_name == 'RUNG_confidence_lambda':
         # RUNG with per-layer learnable SCAD gamma AND per-node confidence-weighted lambda.
         # Extends RUNG_learnable_gamma with one new parameter: raw_alpha (sharpness).
@@ -223,6 +246,7 @@ def get_model_default(
             f"Unknown model_name '{model_name}'. "
             f"Valid choices: RUNG, RUNG_new, RUNG_new_SCAD, RUNG_new_L1, "
             f"RUNG_new_L2, RUNG_new_ADAPTIVE, RUNG_learnable_gamma, "
-            f"RUNG_confidence_lambda, RUNG_percentile_gamma, GCN, GAT, APPNP, L1, MLP."
+            f"RUNG_parametric_gamma, RUNG_confidence_lambda, RUNG_percentile_gamma, "
+            f"GCN, GAT, APPNP, L1, MLP."
         )
 
