@@ -25,8 +25,27 @@ import re
 
 
 def get_model_default_citeseer(
-    model_name, custom_model_params={}, custom_fit_params={}, as_paper=True, seed=None, D=None, device='cpu'
+    model_name, custom_model_params={}, custom_fit_params={}, as_paper=True, seed=None, D=None, device=None
 ):
+    if device is None:
+        # prefer cuda when available
+        # PyTorch 1.12.1 with CUDA 11.3 supports compute capability 5.0+
+        if torch.cuda.is_available():
+            try:
+                props = torch.cuda.get_device_properties(0)
+                print(f"Detected GPU: {props.name} with compute capability {props.major}.{props.minor}")
+                if props.major < 5:
+                    print(f"GPU not supported; falling back to CPU.")
+                    device = torch.device('cpu')
+                else:
+                    device = torch.device('cuda')
+                    print(f"Using GPU: {props.name}")
+            except Exception as e:
+                print(f"Error querying GPU: {e}. Using CPU.")
+                device = torch.device('cpu')
+        else:
+            device = torch.device('cpu')
+    
     torch.manual_seed(0 if seed is None else seed)
 
     A, X, y = get_dataset("citeseer")

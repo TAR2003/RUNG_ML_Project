@@ -33,30 +33,28 @@ def get_model_default(
     dataset, model_name, custom_model_params={}, custom_fit_params={}, as_paper=True, seed=None, D=None, device=None
 ):
     if device is None:
-        # prefer cuda when available, but validate compute capability against
-        # the PyTorch build.  Many older GPUs (e.g. GeForce MX130, capability
-        # 5.0) are no longer supported by recent PyTorch binaries and will
-        # produce ``no kernel image is available for execution on the device``
-        # errors observed on the local machine.  In those cases we force CPU
-        # execution instead of crashing.
+        # prefer cuda when available
+        # PyTorch 1.12.1 with CUDA 11.3 supports compute capability 5.0+
         if torch.cuda.is_available():
             try:
                 props = torch.cuda.get_device_properties(0)
-                # PyTorch wheels currently support sm_70 and higher; adjust
-                # threshold if the build changes.
-                if props.major < 7:
+                print(
+                    f"\nDetected GPU: {props.name} with compute capability "
+                    f"{props.major}.{props.minor}"
+                )
+                # PyTorch 1.12.1 supports compute capability 5.0+
+                if props.major < 5:
                     print(
-                        f"Detected GPU {props.name} with compute capability"
-                        f" {props.major}.{props.minor} which is unsupported by "
-                        "this PyTorch installation; falling back to CPU."
+                        f"GPU {props.name} with compute capability "
+                        f"{props.major}.{props.minor} is not supported; falling back to CPU."
                     )
                     device = torch.device('cpu')
                 else:
                     device = torch.device('cuda')
-            except Exception:
-                # if for some reason we can't query properties, still try
-                # cuda and let the normal error handling occur.
-                device = torch.device('cuda')
+                    print(f"Using GPU: {props.name}\n")
+            except Exception as e:
+                print(f"Error querying GPU properties: {e}. Falling back to CPU.")
+                device = torch.device('cpu')
         else:
             device = torch.device('cpu')
     torch.manual_seed(0 if seed is None else seed)
