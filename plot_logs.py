@@ -67,21 +67,33 @@ _RE_ATK_LINE   = re.compile(r"^\s*Attacked:\s*([\d.]+)[^±]*±([\d.]+)", re.UNIC
 # ---------------------------------------------------------------------------
 
 def _attack_label(stem: str) -> str:
+    """Convert an attack log filename stem into a readable label.
+
+    Supported formats:
+      - RUNG_normMCP_gamma6.0
+      - RUNG_new_SCAD_normSCAD_gamma6.0
+      - RUNG_parametric_gamma_MCP_6.0
+      - (other similar <model>_<norm>_<gamma> patterns)
+
+    The returned label is like:
+      RUNG (MCP, γ=6.0)
+      RUNG_new_SCAD (SCAD, γ=6.0)
     """
-    Convert an attack log filename stem such as
-        RUNG_normMCP_gamma6.0
-        RUNG_new_SCAD_normSCAD_gamma6.0
-    into a short readable label:
-        RUNG (MCP, γ=6.0)
-        RUNG_new_SCAD (SCAD, γ=6.0)
-    """
+    # Preferred format: <model>_norm<norm>_gamma<gamma>
     m = re.match(r"^(.+?)_norm(.+?)_gamma([\d.]+)$", stem)
     if m:
         model, norm, gamma = m.group(1), m.group(2), m.group(3)
-        # drop trailing .0 from gamma for display
-        gamma_str = gamma.rstrip("0").rstrip(".")
-        return f"{model} ({norm}, γ={gamma_str})"
-    return stem   # fallback: use raw stem
+    else:
+        # Fallback format: <model>_<norm>_<gamma>
+        parts = stem.rsplit("_", 2)
+        if len(parts) == 3:
+            model, norm, gamma = parts
+        else:
+            return stem   # unknown format; keep raw
+
+    # drop trailing .0 from gamma for display
+    gamma_str = gamma.rstrip("0").rstrip(".")
+    return f"{model} ({norm}, γ={gamma_str})"
 
 
 def _clean_label(stem: str) -> str:
@@ -364,13 +376,19 @@ def _read_compare_list(path: Path) -> list[str]:
 
 
 def _filter_labels(labels: list[str], queries: list[str]) -> list[str]:
-    """Return subset of labels that match any query (case-insensitive substring)."""
+    """Return subset of labels that match any query.
+
+    Matching is done against the *base model name* (label text before the first " ("),
+    which corresponds to the model key used in logs. Queries are treated as case-\
+    insensitive exact matches against that base name.
+    """
     if not queries:
         return []
+    query_set = {q.lower() for q in queries}
     out = []
     for lbl in labels:
-        lower = lbl.lower()
-        if any(q.lower() in lower for q in queries):
+        base = lbl.split(" (", 1)[0].strip().lower()
+        if base in query_set:
             out.append(lbl)
     return out
 
