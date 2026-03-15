@@ -50,7 +50,7 @@ def main():
         help='Dataset to use (default: cora)'
     )
     parser.add_argument(
-        '--budgets', type=float, nargs='+', default=[0.05, 0.10, 0.20],
+        '--budgets', type=float, nargs='+', default=[0.05, 0.10, 0.20, 0.30,0.40,0.60],
         help='Attack budgets (default: 0.05 0.10 0.20)'
     )
     parser.add_argument(
