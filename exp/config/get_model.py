@@ -17,6 +17,7 @@ from model.rung_parametric_gamma import RUNG_parametric_gamma
 from model.rung_confidence_lambda import RUNG_confidence_lambda
 from model.rung_percentile_gamma import RUNG_percentile_gamma
 from model.rung_learnable_distance import RUNG_learnable_distance
+from model.rung_combined import RUNG_combined
 
 
 # preprocessing for sontructing models
@@ -270,6 +271,31 @@ def get_model_default(
             dropout           = dropout,
         ).to(device)
         return model_ld, custom_fit_params
+    elif model_name == 'RUNG_combined':
+        # RUNG with cosine distance + percentile gamma — zero new parameters.
+        # Combines the two strongest independent improvements:
+        #   - Percentile gamma (from RUNG_percentile_gamma)
+        #   - Cosine distance (from RUNG_learnable_distance mode='cosine')
+        scad_a             = custom_model_params.get('scad_a', 3.7)
+        prop_step          = custom_model_params.get('prop_step', 10)
+        dropout            = custom_model_params.get('dropout', 0.5)
+        lam_hat            = custom_model_params.get('lam_hat', 0.9)
+        percentile_q       = custom_model_params.get('percentile_q', 0.75)
+        use_layerwise_q    = custom_model_params.get('use_layerwise_q', False)
+        percentile_q_late  = custom_model_params.get('percentile_q_late', 0.65)
+        model_comb = RUNG_combined(
+            in_dim            = D,
+            out_dim           = C,
+            hidden_dims       = [64],
+            lam_hat           = lam_hat,
+            percentile_q      = percentile_q,
+            use_layerwise_q   = use_layerwise_q,
+            percentile_q_late = percentile_q_late,
+            scad_a            = scad_a,
+            prop_step         = prop_step,
+            dropout           = dropout,
+        ).to(device)
+        return model_comb, custom_fit_params
     elif model_name == 'RUNG_percentile_adv':
         # RUNG_percentile_gamma trained with curriculum adversarial training.
         # Architecture is identical to RUNG_percentile_gamma.

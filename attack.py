@@ -301,6 +301,10 @@ if __name__ == '__main__':
             model_params['percentile_q_late'] = args.percentile_q_late
             model_params['distance_mode']     = args.distance_mode
             model_params['proj_dim']          = args.proj_dim
+        elif args.model == 'RUNG_combined':
+            model_params['percentile_q']      = args.percentile_q
+            model_params['use_layerwise_q']   = args.use_layerwise_q
+            model_params['percentile_q_late'] = args.percentile_q_late
         run_global_evasion_adaptive_exp([[args.model, model_params, {'max_epoch': 300}]])
     
     sys.stdout.close()
