@@ -58,6 +58,9 @@ _RE_ATK_SUM   = re.compile(r"Attacked:\s*([\d.]+)[^±]*±([\d.]+)", re.UNICODE)
 _RE_CLEAN_DONE = re.compile(r"model .+ done,\s*clean acc:\s*([\d.]+)[^±]*±([\d.]+)", re.IGNORECASE)
 # Per-split pair lines in attack logs: two floats on one line
 _RE_PAIR = re.compile(r"^([\d.]+)\s+([\d.]+)\s*$")
+# Alternative format: consecutive Clean/Attacked lines without Budget prefix (legacy format)
+_RE_CLEAN_LINE = re.compile(r"^\s*Clean:\s*([\d.]+)[^±]*±([\d.]+)", re.UNICODE)
+_RE_ATK_LINE   = re.compile(r"^\s*Attacked:\s*([\d.]+)[^±]*±([\d.]+)", re.UNICODE)
 
 # ---------------------------------------------------------------------------
 # Label builder
@@ -111,12 +114,14 @@ def parse_attack_log(path: Path) -> dict:
           },
           ...
         }
+    Supports both new format (with Budget: sections) and legacy formats.
     Clean accuracy at budget 0 is set from the first "Clean:" summary line found.
     """
     text = path.read_text(errors="replace")
     sections: dict = {}
     current_budget = None
-
+    
+    # First pass: try new format with Budget: sections
     for line in text.splitlines():
         line = line.strip()
         # Normalise unicode minus / non-breaking spaces sometimes in output
@@ -145,22 +150,101 @@ def parse_attack_log(path: Path) -> dict:
     # Keep only fully-parsed sections (both clean + attacked present)
     sections = {b: v for b, v in sections.items()
                 if "clean_mean" in v and "atk_mean" in v}
+    
+    # If new format didn't work, try legacy format (consecutive Clean:/Attacked: without Budget prefix)
+    if not sections:
+        pending_clean = None
+        budget_counter = 0.0
+        
+        for line in text.splitlines():
+            line = line.strip()
+            line = line.replace("\u00c2", "").replace("\u00b1", "±")
+            
+            # Try to match legacy format's Clean line
+            mc = _RE_CLEAN_LINE.match(line)
+            if mc:
+                pending_clean = (float(mc.group(1)), float(mc.group(2)))
+                continue
+            
+            # Try to match legacy format's Attacked line
+            # Only if we have a pending Clean value
+            if pending_clean:
+                ma = _RE_ATK_LINE.match(line)
+                if ma:
+                    clean_mean, clean_std = pending_clean
+                    atk_mean, atk_std = float(ma.group(1)), float(ma.group(2))
+                    # Assign a synthetic budget value based on order
+                    # (legacy format doesn't have explicit budgets)
+                    sections[budget_counter] = {
+                        "clean_mean": clean_mean,
+                        "clean_std": clean_std,
+                        "atk_mean": atk_mean,
+                        "atk_std": atk_std,
+                    }
+                    budget_counter += 0.1
+                    pending_clean = None
+    
     return sections
 
 
 def parse_clean_log(path: Path) -> tuple[float | None, float | None]:
     """
-    Returns (mean_accuracy, std_accuracy) from the last
-    "model … done, clean acc: X±Y" line found in the log, or (None, None).
+    Returns (mean_accuracy, std_accuracy) from the log, or (None, None).
+    Tries multiple formats:
+    1. Standard clean log format: "model … done, clean acc: X±Y" line
+    2. Legacy/alternative format: First "Clean: X±Y" line found
     """
     mean_, std_ = None, None
-    for line in path.read_text(errors="replace").splitlines():
+    text = path.read_text(errors="replace")
+    
+    # Try standard clean log format first
+    for line in text.splitlines():
         line = line.strip().replace("\u00c2", "").replace("\u00b1", "±")
         m = _RE_CLEAN_DONE.search(line)
         if m:
             mean_ = float(m.group(1))
             std_  = float(m.group(2))
+            return mean_, std_  # Return immediately on first match for consistency
+    
+    # Fallback: try to find "Clean:" summary line (legacy or alternative format)
+    if mean_ is None:
+        for line in text.splitlines():
+            line = line.strip().replace("\u00c2", "").replace("\u00b1", "±")
+            mc = _RE_CLEAN_LINE.match(line)
+            if mc:
+                mean_ = float(mc.group(1))
+                std_  = float(mc.group(2))
+                break  # Take first "Clean:" line found
+    
     return mean_, std_
+
+
+def _detect_log_type(path: Path) -> str:
+    """
+    Detect whether a log file contains attack data, clean data, or both.
+    Returns: "attack", "clean", "mixed", or "unknown"
+    This allows graceful handling of logs in wrong directories or mixed content.
+    """
+    text = path.read_text(errors="replace")
+    has_budget = bool(re.search(r"^Budget:", text, re.MULTILINE | re.IGNORECASE))
+    has_attacked = bool(re.search(r"Attacked:", text))
+    has_clean_sum = bool(re.search(r"^\s*Clean:", text, re.MULTILINE))
+    has_model_done = bool(re.search(r"model .+ done,\s*clean acc:", text, re.IGNORECASE))
+    
+    # New format: Budget sections with Attacked summaries = attack data
+    if has_budget and has_attacked:
+        return "attack"
+    
+    # Legacy format: Attacked summaries without Budget = attack data
+    if has_attacked:
+        return "attack"
+    
+    # Clean format: model done line = clean data
+    if has_model_done:
+        return "clean"
+    
+    # Fallback: if none of above, it's unknown
+    return "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -187,27 +271,55 @@ for dataset_dir in sorted(LOG_DIR.iterdir()):
     attack_dir = dataset_dir / "attack"
     if attack_dir.is_dir():
         for log_file in sorted(attack_dir.glob("*.log")):
-            label   = _attack_label(log_file.stem)
-            budgets = parse_attack_log(log_file)
-            if budgets:
-                attack_data[dataset][label] = budgets
-                print(f"  [attack] {dataset}/{log_file.name}  →  "
-                      f"{len(budgets)} budget(s)  label='{label}'")
+            log_type = _detect_log_type(log_file)
+            
+            # If it's actually clean data in attack dir, skip it here
+            # (it will be picked up in clean_dir processing if it exists there)
+            if log_type == "clean":
+                print(f"  [attack] {dataset}/{log_file.name}  →  detected as clean format (skipped from attack)")
+                continue
+            
+            if log_type == "attack":
+                label   = _attack_label(log_file.stem)
+                budgets = parse_attack_log(log_file)
+                if budgets:
+                    attack_data[dataset][label] = budgets
+                    print(f"  [attack] {dataset}/{log_file.name}  →  "
+                          f"{len(budgets)} budget(s)  label='{label}'")
+                else:
+                    print(f"  [attack] {dataset}/{log_file.name}  →  no parseable data (skipped)")
             else:
-                print(f"  [attack] {dataset}/{log_file.name}  →  no parseable data (skipped)")
+                print(f"  [attack] {dataset}/{log_file.name}  →  unknown format (skipped)")
 
     # ── clean logs ─────────────────────────────────────────────────────────
     clean_dir = dataset_dir / "clean"
     if clean_dir.is_dir():
         for log_file in sorted(clean_dir.glob("*.log")):
-            label = _clean_label(log_file.stem)
-            mean_, std_ = parse_clean_log(log_file)
-            if mean_ is not None:
-                clean_data[dataset][label] = (mean_, std_)
-                print(f"  [clean]  {dataset}/{log_file.name}  →  "
-                      f"acc={mean_:.4f}±{std_:.4f}  label='{label}'")
+            log_type = _detect_log_type(log_file)
+            
+            if log_type == "attack":
+                # Attack data in clean dir - use appropriate labeling
+                label = _attack_label(log_file.stem)
+                budgets = parse_attack_log(log_file)
+                if budgets:
+                    attack_data[dataset][label] = budgets
+                    print(f"  [attack] {dataset}/{log_file.name}  →  "
+                          f"{len(budgets)} budget(s)  label='{label}' (found in clean/)")
+                else:
+                    print(f"  [attack] {dataset}/{log_file.name}  →  no parseable data (skipped)")
+                continue
+            
+            if log_type == "clean":
+                label = _clean_label(log_file.stem)
+                mean_, std_ = parse_clean_log(log_file)
+                if mean_ is not None:
+                    clean_data[dataset][label] = (mean_, std_)
+                    print(f"  [clean]  {dataset}/{log_file.name}  →  "
+                          f"acc={mean_:.4f}±{std_:.4f}  label='{label}'")
+                else:
+                    print(f"  [clean]  {dataset}/{log_file.name}  →  no valid data (skipped)")
             else:
-                print(f"  [clean]  {dataset}/{log_file.name}  →  no 'done' line yet (skipped)")
+                print(f"  [clean]  {dataset}/{log_file.name}  →  unknown format (skipped)")
 
 if not attack_data and not clean_data:
     print("\nNo log data found.  Run  python run_all.py  first.")
