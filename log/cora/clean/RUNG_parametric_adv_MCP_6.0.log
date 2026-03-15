@@ -1,0 +1,21 @@
+
+Detected GPU: NVIDIA GeForce MX130 with compute capability 5.0
+Using GPU: NVIDIA GeForce MX130
+
+
+====================================================================
+                        Adversarial Training                        
+====================================================================
+  Model:         RUNG_parametric_gamma
+  alpha:         0.7 (clean=70%, adv=30%)
+  attack_freq:   every 5 epochs
+  train_pgd_steps: 10
+  patience:      100
+
+Curriculum schedule:
+  Phase 0: epoch 0-49 → budget=5%
+  Phase 1: epoch 50-99 → budget=10%
+  Phase 2: epoch 100-199 → budget=20%
+  Phase 3: epoch 200+ → budget=40%
+====================================================================
+

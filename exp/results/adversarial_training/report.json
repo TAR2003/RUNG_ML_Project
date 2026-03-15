@@ -1,0 +1,122 @@
+{
+  "timestamp": "2026-03-16T00:58:15.919538",
+  "start_time": "2026-03-16T00:55:55.779090",
+  "total_runs": 7,
+  "successful_runs": 0,
+  "failed_runs": 7,
+  "total_time_seconds": 140.1361484527588,
+  "results": [
+    {
+      "run": 1,
+      "config": {
+        "model": "RUNG_percentile_adv",
+        "dataset": "cora",
+        "alpha": 0.7,
+        "attack_freq": 5,
+        "train_pgd_steps": 5,
+        "max_epoch": 2,
+        "description": "BASELINE: percentile_adv, quick (2 epochs)"
+      },
+      "log_file": "/home/ttt/Documents/RUNG_ML_Project/exp/results/adversarial_training/logs/01_RUNG_percentile_adv_alpha0.7_freq5_steps5_ep2.log",
+      "success": false,
+      "elapsed_seconds": 20.11648654937744,
+      "timestamp": "2026-03-16T00:56:15.896029"
+    },
+    {
+      "run": 2,
+      "config": {
+        "model": "RUNG_parametric_adv",
+        "dataset": "cora",
+        "alpha": 0.7,
+        "attack_freq": 5,
+        "train_pgd_steps": 5,
+        "max_epoch": 2,
+        "description": "BASELINE: parametric_adv, quick (2 epochs)"
+      },
+      "log_file": "/home/ttt/Documents/RUNG_ML_Project/exp/results/adversarial_training/logs/02_RUNG_parametric_adv_alpha0.7_freq5_steps5_ep2.log",
+      "success": false,
+      "elapsed_seconds": 20.544694185256958,
+      "timestamp": "2026-03-16T00:56:36.441206"
+    },
+    {
+      "run": 3,
+      "config": {
+        "model": "RUNG_percentile_adv",
+        "dataset": "cora",
+        "alpha": 0.5,
+        "attack_freq": 5,
+        "train_pgd_steps": 10,
+        "max_epoch": 10,
+        "description": "ALPHA: percentile_adv, alpha=0.5 (more adversarial)"
+      },
+      "log_file": "/home/ttt/Documents/RUNG_ML_Project/exp/results/adversarial_training/logs/03_RUNG_percentile_adv_alpha0.5_freq5_steps10_ep10.log",
+      "success": false,
+      "elapsed_seconds": 21.619473218917847,
+      "timestamp": "2026-03-16T00:56:58.061198"
+    },
+    {
+      "run": 4,
+      "config": {
+        "model": "RUNG_percentile_adv",
+        "dataset": "cora",
+        "alpha": 0.9,
+        "attack_freq": 5,
+        "train_pgd_steps": 10,
+        "max_epoch": 10,
+        "description": "ALPHA: percentile_adv, alpha=0.9 (more clean)"
+      },
+      "log_file": "/home/ttt/Documents/RUNG_ML_Project/exp/results/adversarial_training/logs/04_RUNG_percentile_adv_alpha0.9_freq5_steps10_ep10.log",
+      "success": false,
+      "elapsed_seconds": 19.497706174850464,
+      "timestamp": "2026-03-16T00:57:17.559452"
+    },
+    {
+      "run": 5,
+      "config": {
+        "model": "RUNG_percentile_adv",
+        "dataset": "cora",
+        "alpha": 0.7,
+        "attack_freq": 1,
+        "train_pgd_steps": 5,
+        "max_epoch": 5,
+        "description": "FREQ: attack_freq=1 (every epoch, slowest)"
+      },
+      "log_file": "/home/ttt/Documents/RUNG_ML_Project/exp/results/adversarial_training/logs/05_RUNG_percentile_adv_alpha0.7_freq1_steps5_ep5.log",
+      "success": false,
+      "elapsed_seconds": 19.802926778793335,
+      "timestamp": "2026-03-16T00:57:37.362961"
+    },
+    {
+      "run": 6,
+      "config": {
+        "model": "RUNG_percentile_adv",
+        "dataset": "cora",
+        "alpha": 0.7,
+        "attack_freq": 10,
+        "train_pgd_steps": 5,
+        "max_epoch": 5,
+        "description": "FREQ: attack_freq=10 (every 10 epochs, fastest)"
+      },
+      "log_file": "/home/ttt/Documents/RUNG_ML_Project/exp/results/adversarial_training/logs/06_RUNG_percentile_adv_alpha0.7_freq10_steps5_ep5.log",
+      "success": false,
+      "elapsed_seconds": 19.937087774276733,
+      "timestamp": "2026-03-16T00:57:57.301193"
+    },
+    {
+      "run": 7,
+      "config": {
+        "model": "RUNG_parametric_adv",
+        "dataset": "cora",
+        "alpha": 0.7,
+        "attack_freq": 5,
+        "train_pgd_steps": 10,
+        "max_epoch": 10,
+        "description": "PARAM: parametric_adv full config"
+      },
+      "log_file": "/home/ttt/Documents/RUNG_ML_Project/exp/results/adversarial_training/logs/07_RUNG_parametric_adv_alpha0.7_freq5_steps10_ep10.log",
+      "success": false,
+      "elapsed_seconds": 18.61777377128601,
+      "timestamp": "2026-03-16T00:58:15.919444"
+    }
+  ]
+}

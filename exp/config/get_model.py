@@ -270,12 +270,58 @@ def get_model_default(
             dropout           = dropout,
         ).to(device)
         return model_ld, custom_fit_params
+    elif model_name == 'RUNG_percentile_adv':
+        # RUNG_percentile_gamma trained with curriculum adversarial training.
+        # Architecture is identical to RUNG_percentile_gamma.
+        # Only the training procedure differs (uses AdversarialTrainer).
+        scad_a             = custom_model_params.get('scad_a', 3.7)
+        prop_step          = custom_model_params.get('prop_step', 10)
+        dropout            = custom_model_params.get('dropout', 0.5)
+        lam_hat            = custom_model_params.get('lam_hat', 0.9)
+        percentile_q       = custom_model_params.get('percentile_q', 0.75)
+        use_layerwise_q    = custom_model_params.get('use_layerwise_q', False)
+        percentile_q_late  = custom_model_params.get('percentile_q_late', 0.65)
+        model_pa = RUNG_percentile_gamma(
+            in_dim            = D,
+            out_dim           = C,
+            hidden_dims       = [64],
+            lam_hat           = lam_hat,
+            percentile_q      = percentile_q,
+            use_layerwise_q   = use_layerwise_q,
+            percentile_q_late = percentile_q_late,
+            scad_a            = scad_a,
+            prop_step         = prop_step,
+            dropout           = dropout,
+        ).to(device)
+        return model_pa, custom_fit_params
+    elif model_name == 'RUNG_parametric_adv':
+        # RUNG_parametric_gamma trained with curriculum adversarial training.
+        # Architecture is identical to RUNG_parametric_gamma.
+        # Only the training procedure differs (uses AdversarialTrainer).
+        decay_rate_init     = custom_model_params.get('decay_rate_init', 0.85)
+        scad_a              = custom_model_params.get('scad_a', 3.7)
+        prop_step           = custom_model_params.get('prop_step', 10)
+        dropout             = custom_model_params.get('dropout', 0.5)
+        lam_hat             = custom_model_params.get('lam_hat', 0.9)
+        model_paa = RUNG_parametric_gamma(
+            in_dim=D,
+            out_dim=C,
+            hidden_dims=[64],
+            lam_hat=lam_hat,
+            gamma_0_init=gamma,
+            decay_rate_init=decay_rate_init,
+            scad_a=scad_a,
+            prop_step=prop_step,
+            dropout=dropout,
+        ).to(device)
+        return model_paa, custom_fit_params
     else:
         raise ValueError(
             f"Unknown model_name '{model_name}'. "
             f"Valid choices: RUNG, RUNG_new, RUNG_new_SCAD, RUNG_new_L1, "
             f"RUNG_new_L2, RUNG_new_ADAPTIVE, RUNG_learnable_gamma, "
             f"RUNG_parametric_gamma, RUNG_confidence_lambda, RUNG_percentile_gamma, "
-            f"RUNG_learnable_distance, GCN, GAT, APPNP, L1, MLP."
+            f"RUNG_learnable_distance, RUNG_percentile_adv, RUNG_parametric_adv, "
+            f"GCN, GAT, APPNP, L1, MLP."
         )
 

@@ -1,0 +1,56 @@
+================================================================================
+ADVERSARIAL TRAINING TEST SUITE - SUMMARY REPORT
+================================================================================
+
+Timestamp:      2026-03-16T00:58:15.920541
+Total runs:     7
+Successful:     0
+Failed:         7
+Total time:     140.1s
+
+--------------------------------------------------------------------------------
+DETAILED RESULTS
+--------------------------------------------------------------------------------
+
+✗ FAIL | Run 01: BASELINE: percentile_adv, quick (2 epochs)
+       Model: RUNG_percentile_adv, Dataset: cora
+       Alpha: 0.7, Freq: 5, Steps: 5, Epochs: 2
+       Time: 20.1s
+       Log: /home/ttt/Documents/RUNG_ML_Project/exp/results/adversarial_training/logs/01_RUNG_percentile_adv_alpha0.7_freq5_steps5_ep2.log
+
+✗ FAIL | Run 02: BASELINE: parametric_adv, quick (2 epochs)
+       Model: RUNG_parametric_adv, Dataset: cora
+       Alpha: 0.7, Freq: 5, Steps: 5, Epochs: 2
+       Time: 20.5s
+       Log: /home/ttt/Documents/RUNG_ML_Project/exp/results/adversarial_training/logs/02_RUNG_parametric_adv_alpha0.7_freq5_steps5_ep2.log
+
+✗ FAIL | Run 03: ALPHA: percentile_adv, alpha=0.5 (more adversarial)
+       Model: RUNG_percentile_adv, Dataset: cora
+       Alpha: 0.5, Freq: 5, Steps: 10, Epochs: 10
+       Time: 21.6s
+       Log: /home/ttt/Documents/RUNG_ML_Project/exp/results/adversarial_training/logs/03_RUNG_percentile_adv_alpha0.5_freq5_steps10_ep10.log
+
+✗ FAIL | Run 04: ALPHA: percentile_adv, alpha=0.9 (more clean)
+       Model: RUNG_percentile_adv, Dataset: cora
+       Alpha: 0.9, Freq: 5, Steps: 10, Epochs: 10
+       Time: 19.5s
+       Log: /home/ttt/Documents/RUNG_ML_Project/exp/results/adversarial_training/logs/04_RUNG_percentile_adv_alpha0.9_freq5_steps10_ep10.log
+
+✗ FAIL | Run 05: FREQ: attack_freq=1 (every epoch, slowest)
+       Model: RUNG_percentile_adv, Dataset: cora
+       Alpha: 0.7, Freq: 1, Steps: 5, Epochs: 5
+       Time: 19.8s
+       Log: /home/ttt/Documents/RUNG_ML_Project/exp/results/adversarial_training/logs/05_RUNG_percentile_adv_alpha0.7_freq1_steps5_ep5.log
+
+✗ FAIL | Run 06: FREQ: attack_freq=10 (every 10 epochs, fastest)
+       Model: RUNG_percentile_adv, Dataset: cora
+       Alpha: 0.7, Freq: 10, Steps: 5, Epochs: 5
+       Time: 19.9s
+       Log: /home/ttt/Documents/RUNG_ML_Project/exp/results/adversarial_training/logs/06_RUNG_percentile_adv_alpha0.7_freq10_steps5_ep5.log
+
+✗ FAIL | Run 07: PARAM: parametric_adv full config
+       Model: RUNG_parametric_adv, Dataset: cora
+       Alpha: 0.7, Freq: 5, Steps: 10, Epochs: 10
+       Time: 18.6s
+       Log: /home/ttt/Documents/RUNG_ML_Project/exp/results/adversarial_training/logs/07_RUNG_parametric_adv_alpha0.7_freq5_steps10_ep10.log
+

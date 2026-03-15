@@ -10,6 +10,9 @@ from train_eval_data.fit_parametric_gamma import fit_parametric_gamma
 from train_eval_data.fit_confidence_lambda import fit_confidence_lambda
 from train_eval_data.fit_percentile_gamma import fit_percentile_gamma
 from train_eval_data.fit_learnable_distance import fit_learnable_distance
+from train_eval_data.fit_percentile_adv import fit_percentile_adv
+from train_eval_data.fit_parametric_adv import fit_parametric_adv
+from experiments.run_ablation import pgd_attack
 from exp.config.get_model_cora import get_model_default_cora
 from exp.config.get_model_citeseer import get_model_default_citeseer
 from exp.config.get_model import get_model_default
@@ -127,6 +130,25 @@ parser.add_argument('--lr',type=float, default=5e-2)
 parser.add_argument('--weight_decay',type=float, default=5e-4)
 parser.add_argument('--max_epoch',type=int, default=300)
 
+# Adversarial training arguments (for RUNG_percentile_adv, RUNG_parametric_adv)
+parser.add_argument('--adv_alpha', type=float, default=0.7,
+                    help='Weight on clean loss in adversarial training. '
+                         'L = adv_alpha * L_clean + (1-adv_alpha) * L_adv. '
+                         '0.7 = 70%% clean, 30%% adversarial (recommended). '
+                         'Increase toward 1.0 if clean accuracy drops. ')
+parser.add_argument('--attack_freq', type=int, default=5,
+                    help='Regenerate adversarial graph every N epochs. '
+                         'Higher = faster. 5 is balanced (recommended).')
+parser.add_argument('--train_pgd_steps', type=int, default=20,
+                    help='PGD iterations during adversarial training. '
+                         '20-50 is sufficient. Fewer = faster training.')
+parser.add_argument('--curriculum_budgets', type=float, nargs='+', default=None,
+                    help='Attack budgets per curriculum phase. '
+                         'Example: 0.05 0.10 0.20 0.40')
+parser.add_argument('--curriculum_epochs', type=int, nargs='+', default=None,
+                    help='Epoch counts per curriculum phase. '
+                         'Example: 50 50 100  (last is ignored, stays forever)')
+
 args = parser.parse_args()
 # Compound model names encode both model and norm (e.g. RUNG_new_SCAD).
 # Normalise them into separate args.model / args.norm before anything else.
@@ -209,6 +231,28 @@ def clean_rep(model, train_param, dataset_name, seed=None):
                 dist_lr_factor=args.dist_lr_factor,
                 **train_param,
             )
+        elif args.model == 'RUNG_percentile_adv':
+            fit_percentile_adv(
+                cur_model, A, X, y, train_idx, val_idx, test_idx,
+                attack_fn=pgd_attack,
+                alpha=args.adv_alpha,
+                attack_freq=args.attack_freq,
+                train_pgd_steps=args.train_pgd_steps,
+                curriculum_budgets=args.curriculum_budgets,
+                curriculum_epochs=args.curriculum_epochs,
+                **train_param,
+            )
+        elif args.model == 'RUNG_parametric_adv':
+            fit_parametric_adv(
+                cur_model, A, X, y, train_idx, val_idx, test_idx,
+                attack_fn=pgd_attack,
+                alpha=args.adv_alpha,
+                attack_freq=args.attack_freq,
+                train_pgd_steps=args.train_pgd_steps,
+                curriculum_budgets=args.curriculum_budgets,
+                curriculum_epochs=args.curriculum_epochs,
+                **train_param,
+            )
         
         cur_model.eval()
         acc.append(accuracy(cur_model(A, X)[test_idx, :], y[test_idx]).cpu().item())
@@ -248,6 +292,14 @@ def make_clean_model_and_save(do_save_model=False, do_save_acc=False, rep_num=5,
         model_config['percentile_q_late'] = args.percentile_q_late
         model_config['distance_mode']     = args.distance_mode
         model_config['proj_dim']          = args.proj_dim
+    # RUNG_percentile_adv uses RUNG_percentile_gamma architecture
+    elif args.model == 'RUNG_percentile_adv':
+        model_config['percentile_q']      = args.percentile_q
+        model_config['use_layerwise_q']   = args.use_layerwise_q
+        model_config['percentile_q_late'] = args.percentile_q_late
+    # RUNG_parametric_adv uses RUNG_parametric_gamma architecture
+    elif args.model == 'RUNG_parametric_adv':
+        model_config['decay_rate_init']   = args.decay_rate_init
 
     model_ls = [
         [args.model, model_config, {'lr':args.lr, 'weight_decay':args.weight_decay,'max_epoch': args.max_epoch}],
