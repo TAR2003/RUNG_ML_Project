@@ -9,6 +9,7 @@ import sys
 import numpy as np
 import torch
 import torch.nn.functional as F
+from tqdm import tqdm, trange
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -36,6 +37,7 @@ def train_clean(
     weight_decay=5e-4,
     early_stopping_patience=100,
     device="cpu",
+    split_id=0,
 ):
     """Train one split and return clean test accuracy."""
     model = model.to(device)
@@ -51,7 +53,10 @@ def train_clean(
     best_state = None
     patience_counter = 0
 
-    for epoch in range(1, max_epoch + 1):
+    # Progress bar for epoch training
+    pbar = trange(1, max_epoch + 1, desc=f"  [Split {split_id}] Training", unit="epoch", leave=False)
+    
+    for epoch in pbar:
         model.train()
         optimizer.zero_grad()
         logits = model(A, X)
@@ -67,6 +72,8 @@ def train_clean(
         with torch.no_grad():
             val_acc = accuracy(model(A, X)[val_idx], y[val_idx]).item()
 
+        pbar.set_postfix({"best_val_acc": f"{best_val_acc:.4f}"})
+
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             best_state = {k: v.clone() for k, v in model.state_dict().items()}
@@ -75,6 +82,7 @@ def train_clean(
             patience_counter += 1
 
         if patience_counter >= early_stopping_patience:
+            pbar.close()
             break
 
     if best_state is not None:
@@ -86,7 +94,7 @@ def train_clean(
     return clean_acc
 
 
-def attack_pgd(model, A, X, y, test_idx, budget=0.1, n_epochs=10, lr_attack=0.01, device="cpu"):
+def attack_pgd(model, A, X, y, test_idx, budget=0.1, n_epochs=10, lr_attack=0.01, device="cpu", budget_id=0, total_budgets=6):
     """Run PGD attack and return attacked test accuracy."""
     model = model.to(device)
     A = A.to(device)
@@ -115,7 +123,8 @@ def attack_pgd(model, A, X, y, test_idx, budget=0.1, n_epochs=10, lr_attack=0.01
             iterations=n_epochs,
             base_lr=lr_attack,
             grad_clip=1.0,
-            progress=False,
+            progress=True,
+            desc=f"    [Budget {budget_id+1}/{total_budgets}, b={budget:.2f}] Attack"
         )
     except Exception:
         with torch.no_grad():
@@ -154,12 +163,14 @@ def _run_one_dataset(args, dataset):
         "percentile_q_late": args.percentile_q_late,
     }
 
-    print(f"Dataset={dataset}: training {len(splits)} split(s)")
+    print(f"\n█ RUNG_combined — Dataset: {dataset}")
+    print(f"  Training {len(splits)} split(s)...")
     split_clean = []
     trained_models = []
     split_test_idx = []
 
-    for split_id, (train_idx, val_idx, test_idx) in enumerate(splits):
+    # Progress bar for splits (training phase)
+    for split_id, (train_idx, val_idx, test_idx) in enumerate(tqdm(splits, desc="  Training splits", unit="split", leave=True)):
         train_idx = train_idx.to(device)
         val_idx = val_idx.to(device)
         test_idx = test_idx.to(device)
@@ -178,6 +189,7 @@ def _run_one_dataset(args, dataset):
             lr=args.lr,
             weight_decay=args.weight_decay,
             device=device,
+            split_id=split_id,
         )
         split_clean.append(clean_acc)
         trained_models.append(model)
@@ -188,30 +200,41 @@ def _run_one_dataset(args, dataset):
 
     if args.skip_attack:
         attack_fh.close()
+        print(f"  ✓ Training complete. Skipped attack phase.\n")
         return clean_log_path, attack_log_path
 
-    for budget in ATTACK_BUDGETS:
+    print(f"\n  Attacking with {len(ATTACK_BUDGETS)} budget(s)...")
+    
+    # Progress bar for budgets (attack phase)
+    for budget_id, budget in enumerate(tqdm(ATTACK_BUDGETS, desc="  Attacking budgets", unit="budget", leave=True)):
         attack_fh.write(f"Budget: {budget}\n")
         attack_fh.write("Model:RUNG_combined\n")
         split_attack = []
-        for i, model in enumerate(trained_models):
+        
+        # Progress bar for splits during attack
+        for split_idx, model in enumerate(tqdm(trained_models, desc=f"    Budget {budget_id+1}/{len(ATTACK_BUDGETS)} (b={budget:.2f}): Attacks", 
+                                                unit="model", leave=False)):
             attacked_acc = attack_pgd(
                 model,
                 A,
                 X,
                 y,
-                split_test_idx[i],
+                split_test_idx[split_idx],
                 budget=budget,
                 n_epochs=args.attack_epochs,
                 lr_attack=args.attack_lr,
                 device=device,
+                budget_id=budget_id,
+                total_budgets=len(ATTACK_BUDGETS),
             )
             split_attack.append(attacked_acc)
-            attack_fh.write(f"{split_clean[i]} {attacked_acc}\n")
+            attack_fh.write(f"{split_clean[split_idx]} {attacked_acc}\n")
+        
         attack_fh.write(f"Clean: {_fmt_stats(split_clean)}\n")
         attack_fh.write(f"Attacked: {_fmt_stats(split_attack)}\n")
 
     attack_fh.close()
+    print(f"  ✓ Attack complete.\n")
     return clean_log_path, attack_log_path
 
 
@@ -230,10 +253,23 @@ def main():
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
 
+    print("\n" + "="*70)
+    print("  RUNG_combined: Train & Attack")
+    print("="*70)
+    
+    all_results = []
     for dataset in args.datasets:
         clean_log, attack_log = _run_one_dataset(args, dataset)
-        print(f"Wrote clean log: {clean_log}")
-        print(f"Wrote attack log: {attack_log}")
+        all_results.append((dataset, clean_log, attack_log))
+
+    print("="*70)
+    print("  Summary")
+    print("="*70)
+    for dataset, clean_log, attack_log in all_results:
+        print(f"  {dataset:12} → clean: {clean_log}")
+        if not args.skip_attack:
+            print(f"  {' ':12} → attack: {attack_log}")
+    print("="*70 + "\n")
 
 
 if __name__ == "__main__":
