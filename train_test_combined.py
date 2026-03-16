@@ -21,7 +21,8 @@ from train_eval_data.get_dataset import get_dataset, get_splits
 from utils import accuracy
 
 
-ATTACK_BUDGETS = [0.05, 0.10, 0.20, 0.30, 0.40, 0.60]
+# Default budget array (if not provided via CLI)
+DEFAULT_ATTACK_BUDGETS = [0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00]
 
 
 def train_clean(
@@ -203,16 +204,16 @@ def _run_one_dataset(args, dataset):
         print(f"  ✓ Training complete. Skipped attack phase.\n")
         return clean_log_path, attack_log_path
 
-    print(f"\n  Attacking with {len(ATTACK_BUDGETS)} budget(s)...")
+    print(f"\n  Attacking with {len(args.budgets)} budget(s)...")
     
     # Progress bar for budgets (attack phase)
-    for budget_id, budget in enumerate(tqdm(ATTACK_BUDGETS, desc="  Attacking budgets", unit="budget", leave=True)):
+    for budget_id, budget in enumerate(tqdm(args.budgets, desc="  Attacking budgets", unit="budget", leave=True)):
         attack_fh.write(f"Budget: {budget}\n")
         attack_fh.write("Model:RUNG_combined\n")
         split_attack = []
         
         # Progress bar for splits during attack
-        for split_idx, model in enumerate(tqdm(trained_models, desc=f"    Budget {budget_id+1}/{len(ATTACK_BUDGETS)} (b={budget:.2f}): Attacks", 
+        for split_idx, model in enumerate(tqdm(trained_models, desc=f"    Budget {budget_id+1}/{len(args.budgets)} (b={budget:.2f}): Attacks", 
                                                 unit="model", leave=False)):
             attacked_acc = attack_pgd(
                 model,
@@ -225,7 +226,7 @@ def _run_one_dataset(args, dataset):
                 lr_attack=args.attack_lr,
                 device=device,
                 budget_id=budget_id,
-                total_budgets=len(ATTACK_BUDGETS),
+                total_budgets=len(args.budgets),
             )
             split_attack.append(attacked_acc)
             attack_fh.write(f"{split_clean[split_idx]} {attacked_acc}\n")
@@ -249,6 +250,10 @@ def main():
     parser.add_argument("--weight_decay", type=float, default=5e-4)
     parser.add_argument("--attack_epochs", type=int, default=10)
     parser.add_argument("--attack_lr", type=float, default=0.01)
+    parser.add_argument(
+        "--budgets", type=float, nargs="+", default=DEFAULT_ATTACK_BUDGETS,
+        help="Attack budgets (fraction of edges). Centrally controlled from run_all.py."
+    )
     parser.add_argument("--skip_attack", action="store_true")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()

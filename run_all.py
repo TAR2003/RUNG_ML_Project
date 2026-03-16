@@ -91,7 +91,7 @@ parser.add_argument(
 # ===== EXTENDED ATTACK BUDGETS =====
 parser.add_argument(
     "--budgets", type=float, nargs="+", 
-    default=[0.05, 0.40],
+    default=[0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00],
     metavar="BUDGET",
     help=(
         "Attack budgets (as fraction of edges). "
@@ -248,8 +248,7 @@ def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
     # Special handling for RUNG_combined which has its own integrated script
     if model == "RUNG_combined" and script == "clean.py":
         # Use train_test_combined.py for RUNG_combined instead
-        # Note: train_test_combined.py has hardcoded attack budgets (ATTACK_BUDGETS constant)
-        # so we do NOT pass --budgets to it
+        # Pass budgets to train_test_combined.py (centrally controlled from run_all.py)
         cmd = [
             PYTHON, str(PROJECT_ROOT / "train_test_combined.py"),
             f"--dataset={dataset}",
@@ -257,7 +256,8 @@ def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
             f"--use_layerwise_q={args.use_layerwise_q}",
             f"--percentile_q_late={args.percentile_q_late}",
             f"--max_epoch={args.max_epoch}",
-        ]
+            "--budgets",
+        ] + [str(b) for b in args.budgets]
         
         t0 = time.perf_counter()
         proc = subprocess.run(cmd, cwd=str(PROJECT_ROOT))
@@ -326,8 +326,8 @@ def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
             ]
     
     elif script == "attack.py":
-        # attack.py uses its own default budgets, no need to pass them
-        pass
+        # Pass the extended budget array to attack.py
+        cmd.extend(["--budgets"] + [str(b) for b in args.budgets])
     
     t0 = time.perf_counter()
     proc = subprocess.run(cmd, cwd=str(PROJECT_ROOT))
