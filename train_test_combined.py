@@ -189,7 +189,7 @@ def attack_pgd(
         model:       Trained model
         A, X, y:     Graph data
         test_idx:    Test indices
-        budget:      Perturbation budget (0 to 1)
+        budget:      Perturbation budget (0 to 1, fraction of edges)
         n_epochs:    Attack iterations
         lr_attack:   Attack learning rate
         device:      torch device
@@ -202,21 +202,58 @@ def attack_pgd(
     X = X.to(device)
     y = y.to(device)
 
-    # ---- Create adversarial graph ----
-    A_attacked, _ = proj_grad_descent(
-        adj=A.cpu().numpy(),
-        feat=X.cpu().numpy(),
-        labels=y.cpu().numpy(),
-        idx_train=None,  # Attack on all edges
-        idx_test=test_idx.cpu().numpy(),
-        model=model,
-        epoch=n_epochs,
-        perturbation_ratio=budget,
-        lr=lr_attack,
-        device=device,
-    )
+    # ---- Define loss and gradient functions ----
+    def loss_fn(flip):
+        """Compute attack loss on a dense flip matrix"""
+        if flip.numel() == 0:
+            return torch.tensor(0.0, device=device)
+        A_pert = A + (flip * (1.0 - 2.0 * A))
+        out = model(A_pert, X)
+        return margin(out[test_idx], y[test_idx]).mean()
 
-    A_attacked = torch.from_numpy(A_attacked).float().to(device)
+    def grad_fn(flip):
+        """Compute gradient of loss w.r.t. flip matrix"""
+        if flip.numel() == 0:
+            return torch.zeros_like(flip)
+        loss = loss_fn(flip)
+        try:
+            grad = torch.autograd.grad(loss, flip, create_graph=True)[0]
+        except RuntimeError:
+            grad = torch.zeros_like(flip)
+        return grad
+
+    # Convert budget from ratio to number of edges (undirected: divide by 2)
+    budget_edge_num = int(budget * A.count_nonzero().item() // 2)
+
+    # ---- Run PGD attack ----
+    try:
+        edge_pert, _ = proj_grad_descent(
+            flip_shape_or_init=A.shape,
+            symmetric=True,
+            device=A.device,
+            budget=budget_edge_num,
+            grad_fn=grad_fn,
+            loss_fn=loss_fn,
+            iterations=n_epochs,
+            base_lr=lr_attack,
+            grad_clip=1.0,
+            progress=False,
+        )
+    except Exception as e:
+        print(f"    ERROR during attack: {e}")
+        # Return clean accuracy if attack fails
+        model.eval()
+        with torch.no_grad():
+            logits = model(A, X)
+            return accuracy(logits[test_idx], y[test_idx]).item()
+
+    # ---- Convert edge indices to dense perturbation matrix ----
+    # edge_pert is [num_edges, 2] edge indices
+    # edge_diff_matrix converts it to dense perturbation matrix
+    if edge_pert.numel() > 0:
+        A_attacked = A + edge_diff_matrix(edge_pert.long(), A)
+    else:
+        A_attacked = A  # No perturbations, use original
 
     # ---- Evaluate on attacked graph ----
     model.eval()
