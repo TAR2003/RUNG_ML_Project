@@ -11,6 +11,7 @@ from train_eval_data.fit_confidence_lambda import fit_confidence_lambda
 from train_eval_data.fit_percentile_gamma import fit_percentile_gamma
 from train_eval_data.fit_learnable_distance import fit_learnable_distance
 from train_eval_data.fit_percentile_adv import fit_percentile_adv
+from train_eval_data.fit_percentile_adv_v2 import fit_percentile_adv_v2
 from train_eval_data.fit_parametric_adv import fit_parametric_adv
 from experiments.run_ablation import pgd_attack
 from exp.config.get_model_cora import get_model_default_cora
@@ -149,6 +150,17 @@ parser.add_argument('--curriculum_epochs', type=int, nargs='+', default=None,
                     help='Epoch counts per curriculum phase. '
                          'Example: 50 50 100  (last is ignored, stays forever)')
 
+# Adversarial training V2 arguments (for RUNG_percentile_adv_v2)
+# These override the V1 defaults for the fixed version
+parser.add_argument('--adv_alpha_v2', type=float, default=0.85,
+                    help='[V2] Weight on clean loss. Default 0.85 (stronger base model focus).')
+parser.add_argument('--train_pgd_steps_v2', type=int, default=100,
+                    help='[V2] PGD steps during training. Default 100 (matches test strength).')
+parser.add_argument('--attack_freq_v2', type=int, default=3,
+                    help='[V2] Regenerate attack every N epochs. Default 3 (fresher examples).')
+parser.add_argument('--warmup_epochs_v2', type=int, default=100,
+                    help='[V2] Clean-only training epochs. Default 100 (MLP stabilization).')
+
 args = parser.parse_args()
 # Compound model names encode both model and norm (e.g. RUNG_new_SCAD).
 # Normalise them into separate args.model / args.norm before anything else.
@@ -242,6 +254,20 @@ def clean_rep(model, train_param, dataset_name, seed=None):
                 curriculum_epochs=args.curriculum_epochs,
                 **train_param,
             )
+        elif args.model == 'RUNG_percentile_adv_v2':
+            # Fixed adversarial training with stronger defaults
+            fit_percentile_adv_v2(
+                cur_model, A, X, y, train_idx, val_idx, test_idx,
+                attack_fn=pgd_attack,
+                alpha=args.adv_alpha_v2,
+                train_pgd_steps=args.train_pgd_steps_v2,
+                attack_freq=args.attack_freq_v2,
+                warmup_epochs=args.warmup_epochs_v2,
+                max_epoch=args.max_epoch,
+                lr=args.lr,
+                weight_decay=args.weight_decay,
+                device=device,
+            )
         elif args.model == 'RUNG_parametric_adv':
             fit_parametric_adv(
                 cur_model, A, X, y, train_idx, val_idx, test_idx,
@@ -294,6 +320,11 @@ def make_clean_model_and_save(do_save_model=False, do_save_acc=False, rep_num=5,
         model_config['proj_dim']          = args.proj_dim
     # RUNG_percentile_adv uses RUNG_percentile_gamma architecture
     elif args.model == 'RUNG_percentile_adv':
+        model_config['percentile_q']      = args.percentile_q
+        model_config['use_layerwise_q']   = args.use_layerwise_q
+        model_config['percentile_q_late'] = args.percentile_q_late
+    # RUNG_percentile_adv_v2 uses RUNG_percentile_gamma architecture (fixed version)
+    elif args.model == 'RUNG_percentile_adv_v2':
         model_config['percentile_q']      = args.percentile_q
         model_config['use_layerwise_q']   = args.use_layerwise_q
         model_config['percentile_q_late'] = args.percentile_q_late
