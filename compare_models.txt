@@ -1,5 +1,4 @@
 RUNG
 RUNG_percentile_gamma
 RUNG_learnable_distance
-RUNG_percentile_adv
 RUNG_combined
