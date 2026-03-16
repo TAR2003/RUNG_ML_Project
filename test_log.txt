@@ -1,0 +1,6 @@
+GPU: NVIDIA GeForce MX130 with compute capability 5.0
+Budget: 0.05
+Model: TEST
+0.7 0.6
+Clean: 0.7
+Attacked: 0.6
