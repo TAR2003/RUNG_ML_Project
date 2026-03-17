@@ -26,6 +26,7 @@ HOMOPHILY_RATIOS = {
     'wisconsin':  0.21,
     'cora':       0.81,
     'citeseer':   0.74,
+    'pubmed':     0.80,
 }
 
 
@@ -41,12 +42,31 @@ def get_dataset(dataset_name: str):
             # Fallback for runs via SEML on the GPU cluster.
             raise e
             return _load_npz(f"{FALLBACK_SRC_PATH}/data/{dataset_name}.npz")
-    elif dataset_name in ['flickr', 'reddit','dblp','pubmed', 'polblogs','acm','BlogCatalog','uai']:
+    elif dataset_name == 'pubmed':
+        # Try loading from cache first, then download via Planetoid if needed
+        cache_dir = os.path.join(os.path.dirname(__file__), "..", "data", "pubmed")
+        adj_path = os.path.join(cache_dir, "adj.pt")
+        fea_path = os.path.join(cache_dir, "fea.pt")
+        label_path = os.path.join(cache_dir, "label.pt")
+        
+        # Try loading from cache
+        if os.path.exists(adj_path) and os.path.exists(fea_path) and os.path.exists(label_path):
+            A = torch.load(adj_path)
+            X = torch.load(fea_path).to(torch.float32)
+            y = torch.load(label_path)
+            return A, X, y
+        
+        # Download via Planetoid if not cached
+        return _load_or_download_pubmed()
+    elif dataset_name in ['flickr', 'reddit','dblp', 'polblogs','acm','BlogCatalog','uai']:
         A = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", dataset_name, "adj.pt"))
         X = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", dataset_name, "fea.pt")).to(torch.float32)
         y = torch.load(os.path.join(os.path.dirname(__file__), "..", "data", dataset_name, "label.pt"))
         
         return A, X, y
+    elif dataset_name.startswith('ogbn-'):
+        # Load Open Graph Benchmark datasets (ogbn-arxiv, ogbn-products, etc.)
+        return _load_or_download_ogb(dataset_name)
     elif dataset_name in HETEROPHILIC_DATASETS:
         # Try loading cached .pt files first; if not present, download & convert.
         return _load_or_download_heterophilic(dataset_name)
@@ -61,6 +81,78 @@ def get_dataset(dataset_name: str):
 # ---------------------------------------------------------------------------
 # Heterophilic dataset utilities
 # ---------------------------------------------------------------------------
+
+def _load_or_download_pubmed(
+    root: str = None,
+) -> tuple:
+    """
+    Load PubMed dataset via torch_geometric Planetoid, cache to disk.
+    
+    Args:
+        root: Optional root for downloads (default: data/pubmed)
+    
+    Returns:
+        (A, X, y) — dense float32 adjacency, float32 features, int64 labels
+    """
+    base_dir = os.path.join(os.path.dirname(__file__), "..", "data", "pubmed")
+    adj_path = os.path.join(base_dir, "adj.pt")
+    fea_path = os.path.join(base_dir, "fea.pt")
+    label_path = os.path.join(base_dir, "label.pt")
+    
+    # Check cache first
+    if os.path.exists(adj_path) and os.path.exists(fea_path) and os.path.exists(label_path):
+        A = torch.load(adj_path)
+        X = torch.load(fea_path).to(torch.float32)
+        y = torch.load(label_path)
+        return A, X, y
+    
+    print(f"[get_dataset] Downloading PubMed dataset via Planetoid...")
+    try:
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore')
+            from torch_geometric.datasets import Planetoid
+            from torch_geometric.utils import to_dense_adj
+    except (ImportError, RuntimeError, OSError) as e:
+        raise ImportError(
+            f"torch_geometric is required for PubMed dataset. \n"
+            f"Install it with:  pip install torch_geometric\n"
+            f"Error: {e}"
+        ) from e
+    
+    download_root = root if root is not None else base_dir
+    try:
+        dataset = Planetoid(root=download_root, name='pubmed')
+        data = dataset[0]
+        N = data.num_nodes
+        
+        # Convert to dense adjacency
+        A = to_dense_adj(data.edge_index, max_num_nodes=N).squeeze(0)
+        A = (A + A.t()).clamp(max=1.0)
+        A.fill_diagonal_(0.0)
+        
+        X = data.x.to(torch.float32)
+        y = data.y.to(torch.int64)
+        
+        num_classes = int(y.max().item()) + 1
+        print(f"  Nodes: {N}, Edges: {int(A.sum().item()//2)}, "
+              f"Features: {X.shape[1]}, Classes: {num_classes}")
+        
+        # Cache to disk
+        os.makedirs(base_dir, exist_ok=True)
+        torch.save(A, adj_path)
+        torch.save(X, fea_path)
+        torch.save(y, label_path)
+        print(f"  Cached to {base_dir}")
+    except (RuntimeError, OSError) as e:
+        raise RuntimeError(
+            f"Failed to download PubMed dataset. \n"
+            f"Try upgrading: pip install --upgrade torch_geometric\n"
+            f"Error: {e}"
+        ) from e
+    
+    return A, X, y
+
 
 def get_homophily_ratio(A: torch.Tensor, y: torch.Tensor) -> float:
     """
@@ -126,28 +218,42 @@ def _load_or_download_heterophilic(
     # ---- Slow path: download via torch_geometric and convert ----------------
     print(f"[get_dataset] Downloading heterophilic dataset '{name}' via torch_geometric ...")
     try:
-        import torch_geometric.transforms as T
-        from torch_geometric.utils import to_dense_adj
-    except ImportError as e:
+        # Defer import and suppress torch_geometric JIT issues
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore')
+            # Import at function level to avoid module-load JIT errors
+            import torch_geometric.transforms as T
+            from torch_geometric.utils import to_dense_adj
+    except (ImportError, RuntimeError, OSError) as e:
         raise ImportError(
-            "torch_geometric is required for heterophilic datasets. "
-            "Install it with:  pip install torch_geometric"
+            f"torch_geometric is required for heterophilic datasets. \n"
+            f"Install it with:  pip install torch_geometric\n"
+            f"Error: {e}"
         ) from e
 
     download_root = root if root is not None else os.path.join(base_dir, "_pyg_downloads")
     transform = T.NormalizeFeatures()
 
-    if name in ('chameleon', 'squirrel'):
-        from torch_geometric.datasets import WikipediaNetwork
-        dataset = WikipediaNetwork(root=download_root, name=name, transform=transform)
-    elif name == 'actor':
-        from torch_geometric.datasets import Actor
-        dataset = Actor(root=download_root, transform=transform)
-    elif name in ('cornell', 'texas', 'wisconsin'):
-        from torch_geometric.datasets import WebKB
-        dataset = WebKB(root=download_root, name=name, transform=transform)
-    else:
-        raise ValueError(f"Unknown heterophilic dataset: '{name}'")
+    try:
+        if name in ('chameleon', 'squirrel'):
+            from torch_geometric.datasets import WikipediaNetwork
+            dataset = WikipediaNetwork(root=download_root, name=name, transform=transform)
+        elif name == 'actor':
+            from torch_geometric.datasets import Actor
+            dataset = Actor(root=download_root, transform=transform)
+        elif name in ('cornell', 'texas', 'wisconsin'):
+            from torch_geometric.datasets import WebKB
+            dataset = WebKB(root=download_root, name=name, transform=transform)
+        else:
+            raise ValueError(f"Unknown heterophilic dataset: '{name}'")
+    except (RuntimeError, OSError) as e:
+        raise RuntimeError(
+            f"Failed to download heterophilic dataset '{name}'. \n"
+            f"This may be due to torch_geometric version incompatibility. \n"
+            f"Try upgrading: pip install --upgrade torch_geometric\n"
+            f"Error: {e}"
+        ) from e
 
     data = dataset[0]
     N = data.num_nodes
@@ -201,6 +307,92 @@ def load_heterophilic_dataset(name: str, root: str = None, split_seed: int = 42)
     homophily = get_homophily_ratio(A, y)
     return A, X, y, homophily
 
+
+def _load_or_download_ogb(
+    name: str,
+    root: str = None,
+) -> tuple:
+    """
+    Load an Open Graph Benchmark (OGB) dataset, downloading via ogb if needed.
+
+    Supported datasets:
+        ogbn-arxiv  (Citation network, ~169K nodes, ~1M edges)
+        ogbn-products, ogbn-papers100M, etc.
+
+    The data are cached as `data/ogb/{name}/{adj,fea,label}.pt` for fast re-loading.
+
+    Args:
+        name: Dataset name starting with 'ogbn-', e.g., 'ogbn-arxiv'
+        root: Optional custom root for OGB downloads (default: data/ogb)
+
+    Returns:
+        (A, X, y) — dense float32 adjacency, float32 features, int64 labels
+    """
+    base_dir = os.path.join(os.path.dirname(__file__), "..", "data", "ogb")
+    cache_dir = os.path.join(base_dir, name)
+    adj_path   = os.path.join(cache_dir, "adj.pt")
+    fea_path   = os.path.join(cache_dir, "fea.pt")
+    label_path = os.path.join(cache_dir, "label.pt")
+
+    # ---- Fast path: load from cache ----------------------------------------
+    if os.path.exists(adj_path) and os.path.exists(fea_path) and os.path.exists(label_path):
+        print(f"[get_dataset] Loading cached OGB dataset '{name}' from {cache_dir}")
+        A = torch.load(adj_path)
+        X = torch.load(fea_path).to(torch.float32)
+        y = torch.load(label_path)
+        return A, X, y
+
+    # ---- Slow path: download via OGB and convert ----------------
+    print(f"[get_dataset] Downloading OGB dataset '{name}' ...")
+    try:
+        # Defer imports and suppress warnings
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore')
+            from ogb.nodeproppred import NodePropPredDataset
+            from torch_geometric.utils import to_dense_adj
+    except (ImportError, RuntimeError, OSError) as e:
+        raise ImportError(
+            f"ogb and torch_geometric are required for OGB datasets. \n"
+            f"Install them with:  pip install ogb torch_geometric\n"
+            f"Error: {e}"
+        ) from e
+
+    download_root = root if root is not None else os.path.join(base_dir, "_ogb_downloads")
+    try:
+        dataset = NodePropPredDataset(name=name, root=download_root)
+        split_idx = dataset.get_idx_split()
+        data = dataset[0]
+        N = data.num_nodes
+    except (RuntimeError, OSError) as e:
+        raise RuntimeError(
+            f"Failed to download OGB dataset '{name}'. \n"
+            f"This may be due to torch_geometric version incompatibility. \n"
+            f"Try upgrading: pip install --upgrade torch_geometric ogb\n"
+            f"Error: {e}"
+        ) from e
+
+    # Convert to dense adjacency for consistency with codebase
+    A = to_dense_adj(data.edge_index, max_num_nodes=N).squeeze(0)
+    # Ensure symmetry and no self-loops
+    A = (A + A.t()).clamp(max=1.0)
+    A.fill_diagonal_(0.0)
+
+    X = data.x.to(torch.float32)  # [N, F]
+    y = data.y.squeeze(-1).to(torch.int64)  # [N]
+
+    num_classes = int(y.max().item()) + 1
+    print(f"  Nodes: {N}, Edges: {int(A.sum().item()//2)}, "
+          f"Features: {X.shape[1]}, Classes: {num_classes}")
+
+    # Cache to disk
+    os.makedirs(cache_dir, exist_ok=True)
+    torch.save(A, adj_path)
+    torch.save(X, fea_path)
+    torch.save(y, label_path)
+    print(f"  Cached to {cache_dir}")
+
+    return A, X, y
 
 
 def _load_npz(path: str):

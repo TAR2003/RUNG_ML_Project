@@ -2,21 +2,24 @@
 """
 run_all.py — Train and/or attack one or more RUNG model strategies, writing logs.
 
-MAIN USAGE (4-model comparison):
-    python run_all.py --datasets cora citeseer --models RUNG RUNG_percentile_gamma RUNG_learnable_distance RUNG_combined
+MAIN USAGE (4-model comparison on 3 datasets):
+    python run_all.py --datasets cora citeseer pubmed --models RUNG RUNG_percentile_gamma RUNG_learnable_distance RUNG_combined
 
-    This trains + attacks all 4 models across Cora and Citeseer with extended budgets:
+    This trains + attacks all 4 models across Cora, Citeseer, and Pubmed with extended budgets:
     [0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00]
 
 ADDITIONAL USAGE:
-    # Train + attack RUNG (MCP, gamma=6.0) on cora and citeseer:
-    python run_all.py --datasets cora citeseer --models RUNG
+    # Train + attack on new datasets (with auto-download):
+    python run_all.py --datasets cora citeseer pubmed chameleon ogbn-arxiv --models RUNG RUNG_percentile_gamma RUNG_learnable_distance RUNG_combined
+
+    # Train + attack RUNG (MCP, gamma=6.0) on pubmed:
+    python run_all.py --datasets pubmed --models RUNG
 
     # Run multiple strategies side-by-side:
-    python run_all.py --datasets cora citeseer --models RUNG RUNG_new_SCAD
+    python run_all.py --datasets cora pubmed chameleon --models RUNG RUNG_new_SCAD
 
     # Train only (skip PGD attack):
-    python run_all.py --datasets cora citeseer --models RUNG --skip_attack
+    python run_all.py --datasets ogbn-arxiv --models RUNG --skip_attack
 
     # Attack only (requires models already saved by a previous clean run):
     python run_all.py --datasets cora citeseer --models RUNG --skip_clean
@@ -27,23 +30,46 @@ ADDITIONAL USAGE:
     # Longer training:
     python run_all.py --datasets cora --models RUNG --max_epoch 500
 
-SUPPORTED MODELS:
+SUPPORTED MODELS (4 core models recommended):
     Base:
         RUNG, RUNG_new, RUNG_new_SCAD, RUNG_new_L1, RUNG_new_L2, RUNG_new_ADAPTIVE
         RUNG_SCAD, RUNG_L1, RUNG_L2
 
     Advanced variants (4-model comparison):
-        RUNG_percentile_gamma     — Percentile-based adaptive gamma per layer
-        RUNG_learnable_distance   — Learnable distance metric (cosine/projection/bilinear)
-        RUNG_combined             — Percentile gamma + cosine distance
+        ★ RUNG_percentile_gamma     — Percentile-based adaptive gamma per layer
+        ★ RUNG_learnable_distance   — Learnable distance metric (cosine/projection/bilinear)
+        ★ RUNG_combined             — Percentile gamma + cosine distance
+        ★ RUNG (default MCP)        — Baseline with fixed penalty
 
     Other:
         RUNG_learnable_gamma, RUNG_parametric_gamma, RUNG_confidence_lambda
         GCN, GAT, APPNP, L1, MLP
 
+SUPPORTED DATASETS:
+    Citation networks (pre-downloaded):
+        cora      — Cora ML (homophilic, ~2485 nodes)
+        citeseer  — Citeseer (homophilic, ~2120 nodes)
+
+    Additional homophilic datasets (auto-download on first run):
+        pubmed    — PubMed (homophilic, ~19K nodes)
+
+    Heterophilic datasets (auto-download via torch_geometric on first run):
+        chameleon — WikipediaNetwork (heterophilic, ~2.3K nodes, homophily ≈ 0.23)
+        squirrel  — WikipediaNetwork (heterophilic, ~5.2K nodes, homophily ≈ 0.22)
+        actor, cornell, texas, wisconsin  — Other heterophilic datasets
+
+    Open Graph Benchmark (auto-download via ogb on first run):
+        ogbn-arxiv      — Citation network (~169K nodes, ~1M edges)
+        ogbn-products   — Product co-purchase network
+        (other ogbn-* datasets supported via OGB)
+
 LOGS:
     log/<dataset>/clean/<model>_<norm>_<gamma>.log
     log/<dataset>/attack/<model>_norm<norm>_gamma<gamma>.log
+
+DEPENDENCIES:
+    For new datasets (pubmed, chameleon, ogbn-arxiv), you may need:
+      pip install torch_geometric ogb  (if not already installed)
 
 VISUALISE:
     python plot_logs.py
@@ -62,9 +88,12 @@ parser = argparse.ArgumentParser(
     description="Train and/or attack one or more model strategies across datasets."
 )
 parser.add_argument(
-    "--datasets", nargs="+", default=["cora", "citeseer"],
+    "--datasets", nargs="+", default=["cora", "citeseer", "pubmed"],
     metavar="DATASET",
-    help="Datasets to process (default: cora citeseer).",
+    help=(
+        "Datasets to process. Examples: cora, citeseer, pubmed, chameleon, ogbn-arxiv. "
+        "Default: cora citeseer pubmed."
+    ),
 )
 parser.add_argument(
     "--models", nargs="+", default=["RUNG"],
@@ -436,6 +465,18 @@ print(f"    RUNG_percentile_gamma:        Percentile-based gamma, percentile_q={
 print(f"    RUNG_learnable_distance:      Distance={args.distance_mode}, percentile_q={args.percentile_q}")
 print(f"    RUNG_combined:                Cosine distance + percentile_q={args.percentile_q}")
 print(f"    Attack budgets:               {args.budgets}")
+print(f"\n  Datasets used:")
+for ds in args.datasets:
+    if ds in ["cora", "citeseer"]:
+        print(f"    {ds:<15} — Pre-downloaded (.npz)")
+    elif ds == "pubmed":
+        print(f"    {ds:<15} — Auto-downloaded from pre-cached .pt files")
+    elif ds in ["chameleon", "squirrel", "actor", "cornell", "texas", "wisconsin"]:
+        print(f"    {ds:<15} — Auto-downloaded via torch_geometric (heterophilic)")
+    elif ds.startswith("ogbn-"):
+        print(f"    {ds:<15} — Auto-downloaded via OGB (Open Graph Benchmark)")
+    else:
+        print(f"    {ds:<15} — Auto-downloaded (custom)")
 print(f"\n")
 
 if n_fail:
