@@ -7,6 +7,7 @@ sys.path.append("./")
 from train_eval_data.fit import fit
 from train_eval_data.fit_learnable_gamma import fit_learnable_gamma
 from train_eval_data.fit_parametric_gamma import fit_parametric_gamma
+from train_eval_data.fit_combined_model import fit_combined_model
 from train_eval_data.fit_confidence_lambda import fit_confidence_lambda
 from train_eval_data.fit_percentile_gamma import fit_percentile_gamma
 from train_eval_data.fit_learnable_distance import fit_learnable_distance
@@ -126,6 +127,14 @@ parser.add_argument('--dist_lr_factor', type=float, default=0.5,
                          'Only used if distance_mode is projection or bilinear. '
                          'Default 0.5 = distance LR is half of base LR.')
 
+# RUNG_combined_model specific arguments
+parser.add_argument('--alpha_blend_init', type=float, default=0.5,
+                    help='Initial blend weight for parametric vs percentile gamma in RUNG_combined_model. '
+                         '0.0 = pure percentile (data-driven), '
+                         '1.0 = pure parametric (learned schedule), '
+                         '0.5 = equal blend (recommended starting point). '
+                         'Learnable during training.')
+
 # fitting setting
 parser.add_argument('--lr',type=float, default=5e-2)
 parser.add_argument('--weight_decay',type=float, default=5e-4)
@@ -243,6 +252,13 @@ def clean_rep(model, train_param, dataset_name, seed=None):
                 dist_lr_factor=args.dist_lr_factor,
                 **train_param,
             )
+        elif args.model == 'RUNG_combined_model':
+            fit_combined_model(
+                cur_model, A, X, y, train_idx, val_idx,
+                gamma_lr_factor=args.gamma_lr_factor,
+                gamma_reg_strength=args.gamma_reg_strength,
+                **train_param,
+            )
         elif args.model == 'RUNG_percentile_adv':
             fit_percentile_adv(
                 cur_model, A, X, y, train_idx, val_idx, test_idx,
@@ -318,6 +334,11 @@ def make_clean_model_and_save(do_save_model=False, do_save_acc=False, rep_num=5,
         model_config['percentile_q_late'] = args.percentile_q_late
         model_config['distance_mode']     = args.distance_mode
         model_config['proj_dim']          = args.proj_dim
+    # Pass RUNG_combined_model-specific params into model config.
+    elif args.model == 'RUNG_combined_model':
+        model_config['percentile_q']      = args.percentile_q
+        model_config['decay_rate_init']   = args.decay_rate_init
+        model_config['alpha_blend_init']  = args.alpha_blend_init
     # RUNG_percentile_adv uses RUNG_percentile_gamma architecture
     elif args.model == 'RUNG_percentile_adv':
         model_config['percentile_q']      = args.percentile_q

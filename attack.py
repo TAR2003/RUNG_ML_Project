@@ -63,6 +63,15 @@ parser.add_argument('--proj_dim', type=int, default=32,
                     help='Projection dimension for projection/bilinear modes (default: 32).')
 parser.add_argument('--dist_lr_factor', type=float, default=0.5,
                     help='LR multiplier for distance module (default: 0.5).')
+
+# RUNG_parametric_gamma specific arguments
+parser.add_argument('--decay_rate_init', type=float, default=0.85,
+                    help='Initial decay rate for RUNG_parametric_gamma (default: 0.85).')
+
+# RUNG_combined_model specific arguments
+parser.add_argument('--alpha_blend_init', type=float, default=0.5,
+                    help='Initial blend weight for RUNG_combined_model (default: 0.5).')
+
 parser.add_argument('--budgets', type=float, nargs='+', default=[0.05, 0.1, 0.2, 0.3, 0.4, 0.6],
                     help='Attack budgets to evaluate (default: 0.05 0.1 0.2 0.3 0.4 0.6).')
 
@@ -305,6 +314,10 @@ if __name__ == '__main__':
             model_params['percentile_q']      = args.percentile_q
             model_params['use_layerwise_q']   = args.use_layerwise_q
             model_params['percentile_q_late'] = args.percentile_q_late
+        elif args.model == 'RUNG_combined_model':
+            model_params['percentile_q']      = args.percentile_q
+            model_params['decay_rate_init']   = args.decay_rate_init
+            model_params['alpha_blend_init']  = args.alpha_blend_init
         run_global_evasion_adaptive_exp([[args.model, model_params, {'max_epoch': 300}]])
     
     sys.stdout.close()

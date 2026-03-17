@@ -18,6 +18,7 @@ from model.rung_confidence_lambda import RUNG_confidence_lambda
 from model.rung_percentile_gamma import RUNG_percentile_gamma
 from model.rung_learnable_distance import RUNG_learnable_distance
 from model.rung_combined import RUNG_combined
+from model.rung_combined_model import RUNG_combined_model
 
 
 # preprocessing for sontructing models
@@ -296,6 +297,33 @@ def get_model_default(
             dropout           = dropout,
         ).to(device)
         return model_comb, custom_fit_params
+    elif model_name == 'RUNG_combined_model':
+        # RUNG with all three mechanisms:
+        # 1. Cosine distance (from RUNG_learnable_distance)
+        # 2. Parametric gamma (from RUNG_parametric_gamma)  
+        # 3. Percentile gamma (from RUNG_percentile_gamma)
+        # Combined via learnable blend: gamma = alpha * gamma_param + (1-alpha) * gamma_data
+        scad_a             = custom_model_params.get('scad_a', 3.7)
+        prop_step          = custom_model_params.get('prop_step', 10)
+        dropout            = custom_model_params.get('dropout', 0.5)
+        lam_hat            = custom_model_params.get('lam_hat', 0.9)
+        percentile_q       = custom_model_params.get('percentile_q', 0.75)
+        decay_rate_init    = custom_model_params.get('decay_rate_init', 0.85)
+        alpha_blend_init   = custom_model_params.get('alpha_blend_init', 0.5)
+        model_cmb = RUNG_combined_model(
+            in_dim            = D,
+            out_dim           = C,
+            hidden_dims       = [64],
+            lam_hat           = lam_hat,
+            percentile_q      = percentile_q,
+            gamma_0_init      = gamma,
+            decay_rate_init   = decay_rate_init,
+            alpha_blend_init  = alpha_blend_init,
+            scad_a            = scad_a,
+            prop_step         = prop_step,
+            dropout           = dropout,
+        ).to(device)
+        return model_cmb, custom_fit_params
     elif model_name == 'RUNG_percentile_adv':
         # RUNG_percentile_gamma trained with curriculum adversarial training.
         # Architecture is identical to RUNG_percentile_gamma.
@@ -347,7 +375,8 @@ def get_model_default(
             f"Valid choices: RUNG, RUNG_new, RUNG_new_SCAD, RUNG_new_L1, "
             f"RUNG_new_L2, RUNG_new_ADAPTIVE, RUNG_learnable_gamma, "
             f"RUNG_parametric_gamma, RUNG_confidence_lambda, RUNG_percentile_gamma, "
-            f"RUNG_learnable_distance, RUNG_percentile_adv, RUNG_parametric_adv, "
+            f"RUNG_learnable_distance, RUNG_combined, RUNG_combined_model, "
+            f"RUNG_percentile_adv, RUNG_parametric_adv, "
             f"GCN, GAT, APPNP, L1, MLP."
         )
 
