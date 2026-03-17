@@ -82,11 +82,109 @@ def get_dataset(dataset_name: str):
 # Heterophilic dataset utilities
 # ---------------------------------------------------------------------------
 
+def _load_pubmed_direct(base_dir: str) -> tuple:
+    """
+    Download PubMed data DIRECTLY without torch_geometric (avoids JIT compilation issues).
+    
+    Uses the canonical Planetoid repository on GitHub.
+    Parses the pickle files and constructs edge index manually.
+    
+    Returns:
+        (A, X, y) — dense float32 adjacency, float32 features, int64 labels
+    """
+    import pickle
+    import urllib.request
+    from pathlib import Path
+    
+    os.makedirs(base_dir, exist_ok=True)
+    base_url = "https://github.com/kimiyoung/planetoid/raw/master/data/"
+    
+    # Files to download
+    files_to_download = {
+        'graph': 'ind.pubmed.graph',
+        'x': 'ind.pubmed.x',
+        'y': 'ind.pubmed.y',
+        'tx': 'ind.pubmed.tx',
+        'ty': 'ind.pubmed.ty',
+        'test_idx': 'ind.pubmed.test.index',
+    }
+    
+    local_files = {}
+    print(f"  [direct download] Downloading PubMed data from GitHub...")
+    
+    for key, filename in files_to_download.items():
+        local_path = os.path.join(base_dir, filename)
+        if not os.path.exists(local_path):
+            url = base_url + filename
+            print(f"    Downloading {filename}...")
+            try:
+                urllib.request.urlretrieve(url, local_path)
+            except Exception as e:
+                raise RuntimeError(f"Failed to download {filename} from {url}: {e}") from e
+        local_files[key] = local_path
+    
+    # Parse files
+    def load_pickle(path):
+        with open(path, 'rb') as f:
+            return pickle.load(f, encoding='latin1')
+    
+    print(f"  [direct download] Parsing data...")
+    x = load_pickle(local_files['x'])  # [train_size, features]
+    y = load_pickle(local_files['y'])  # [train_size, num_classes] (one-hot)
+    tx = load_pickle(local_files['tx'])  # [test_size, features]
+    ty = load_pickle(local_files['ty'])  # [test_size, num_classes] (one-hot)
+    graph = load_pickle(local_files['graph'])  # {node_id: [neighbor_ids]}
+    
+    # Load test indices
+    test_idx = np.loadtxt(local_files['test_idx'], dtype=np.int32)
+    
+    # Convert sparse matrices to dense if needed
+    if sp.issparse(x):
+        x = x.toarray()
+    if sp.issparse(tx):
+        tx = tx.toarray()
+    
+    # Combine train and test features
+    X = np.vstack([x, tx]).astype(np.float32)
+    
+    # Combine train and test labels (convert from one-hot)
+    y_train = np.argmax(y, axis=1)
+    y_test = np.argmax(ty, axis=1)
+    y_full = np.zeros(X.shape[0], dtype=np.int32)
+    y_full[: len(y_train)] = y_train
+    y_full[len(y_train):] = y_test
+    
+    # Build adjacency from graph dict
+    N = X.shape[0]
+    A = np.zeros((N, N), dtype=np.float32)
+    for src_node, dst_neighbors in graph.items():
+        for dst_node in dst_neighbors:
+            if src_node < N and dst_node < N:
+                A[src_node, dst_node] = 1.0
+                A[dst_node, src_node] = 1.0  # Undirected
+    
+    # Remove self-loops
+    np.fill_diagonal(A, 0.0)
+    
+    # Convert to torch tensors
+    A = torch.from_numpy(A).to(torch.float32)
+    X = torch.from_numpy(X).to(torch.float32)
+    y = torch.from_numpy(y_full).to(torch.int64)
+    
+    # Verify dimensions
+    num_classes = int(y.max().item()) + 1
+    print(f"  [direct download] Loaded: {N} nodes, {int(A.sum().item()//2)} edges, "
+          f"{X.shape[1]} features, {num_classes} classes")
+    
+    return A, X, y
+
+
 def _load_or_download_pubmed(
     root: str = None,
 ) -> tuple:
     """
-    Load PubMed dataset via torch_geometric Planetoid, cache to disk.
+    Load PubMed dataset. First tries direct download (avoiding torch_geometric JIT issues).
+    Falls back to torch_geometric if direct download fails.
     
     Args:
         root: Optional root for downloads (default: data/pubmed)
@@ -106,7 +204,22 @@ def _load_or_download_pubmed(
         y = torch.load(label_path)
         return A, X, y
     
-    print(f"[get_dataset] Downloading PubMed dataset via Planetoid...")
+    print(f"[get_dataset] Downloading PubMed dataset...")
+    
+    # FIRST ATTEMPT: Direct download (avoids torch_geometric JIT issues)
+    try:
+        A, X, y = _load_pubmed_direct(base_dir)
+        # Cache to disk
+        torch.save(A, adj_path)
+        torch.save(X, fea_path)
+        torch.save(y, label_path)
+        print(f"  Cached to {base_dir}")
+        return A, X, y
+    except Exception as e:
+        print(f"  [direct download] Failed: {e}")
+        print(f"  [torch_geometric fallback] Attempting torch_geometric...")
+    
+    # FALLBACK: torch_geometric (if direct download fails)
     try:
         import warnings
         with warnings.catch_warnings():
@@ -115,8 +228,8 @@ def _load_or_download_pubmed(
             from torch_geometric.utils import to_dense_adj
     except (ImportError, RuntimeError, OSError) as e:
         raise ImportError(
-            f"torch_geometric is required for PubMed dataset. \n"
-            f"Install it with:  pip install torch_geometric\n"
+            f"PubMed download failed. Both direct and torch_geometric methods failed.\n"
+            f"Try installing torch_geometric: pip install torch_geometric\n"
             f"Error: {e}"
         ) from e
     
@@ -139,14 +252,13 @@ def _load_or_download_pubmed(
               f"Features: {X.shape[1]}, Classes: {num_classes}")
         
         # Cache to disk
-        os.makedirs(base_dir, exist_ok=True)
         torch.save(A, adj_path)
         torch.save(X, fea_path)
         torch.save(y, label_path)
         print(f"  Cached to {base_dir}")
     except (RuntimeError, OSError) as e:
         raise RuntimeError(
-            f"Failed to download PubMed dataset. \n"
+            f"Failed to download PubMed dataset via torch_geometric. \n"
             f"Try upgrading: pip install --upgrade torch_geometric\n"
             f"Error: {e}"
         ) from e
@@ -220,15 +332,22 @@ def _load_or_download_heterophilic(
     try:
         # Defer import and suppress torch_geometric JIT issues
         import warnings
+        import os as os_module
+        
+        # Set environment to suppress JIT compilation
+        os_module.environ['TORCH_JIT_IGNORE_LCHECK'] = '1'
+        
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore')
+            warnings.filterwarnings('ignore', category=DeprecationWarning)
             # Import at function level to avoid module-load JIT errors
             import torch_geometric.transforms as T
             from torch_geometric.utils import to_dense_adj
     except (ImportError, RuntimeError, OSError) as e:
         raise ImportError(
-            f"torch_geometric is required for heterophilic datasets. \n"
+            f"torch_geometric is required for heterophilic datasets ('{name}'). \n"
             f"Install it with:  pip install torch_geometric\n"
+            f"Or try downgrading: pip install 'torch_geometric==2.3.0'\n"
             f"Error: {e}"
         ) from e
 
@@ -247,7 +366,7 @@ def _load_or_download_heterophilic(
             dataset = WebKB(root=download_root, name=name, transform=transform)
         else:
             raise ValueError(f"Unknown heterophilic dataset: '{name}'")
-    except (RuntimeError, OSError) as e:
+    except (RuntimeError, OSError, TypeError) as e:
         raise RuntimeError(
             f"Failed to download heterophilic dataset '{name}'. \n"
             f"This may be due to torch_geometric version incompatibility. \n"
@@ -345,16 +464,23 @@ def _load_or_download_ogb(
     # ---- Slow path: download via OGB and convert ----------------
     print(f"[get_dataset] Downloading OGB dataset '{name}' ...")
     try:
-        # Defer imports and suppress warnings
+        # Defer imports and suppress warnings/JIT issues
         import warnings
+        import os as os_module
+        
+        # Set environment to suppress JIT compilation
+        os_module.environ['TORCH_JIT_IGNORE_LCHECK'] = '1'
+        
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore')
+            warnings.filterwarnings('ignore', category=DeprecationWarning)
             from ogb.nodeproppred import NodePropPredDataset
             from torch_geometric.utils import to_dense_adj
     except (ImportError, RuntimeError, OSError) as e:
         raise ImportError(
             f"ogb and torch_geometric are required for OGB datasets. \n"
             f"Install them with:  pip install ogb torch_geometric\n"
+            f"Or try older versions: pip install 'torch_geometric==2.3.0' ogb\n"
             f"Error: {e}"
         ) from e
 
@@ -364,11 +490,12 @@ def _load_or_download_ogb(
         split_idx = dataset.get_idx_split()
         data = dataset[0]
         N = data.num_nodes
-    except (RuntimeError, OSError) as e:
+    except (RuntimeError, OSError, TypeError) as e:
         raise RuntimeError(
             f"Failed to download OGB dataset '{name}'. \n"
             f"This may be due to torch_geometric version incompatibility. \n"
             f"Try upgrading: pip install --upgrade torch_geometric ogb\n"
+            f"Or try downgrading: pip install 'torch_geometric==2.3.0'\n"
             f"Error: {e}"
         ) from e
 
