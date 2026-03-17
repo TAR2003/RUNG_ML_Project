@@ -427,16 +427,115 @@ def load_heterophilic_dataset(name: str, root: str = None, split_seed: int = 42)
     return A, X, y, homophily
 
 
+
+
+def _load_ogbn_arxiv_direct(base_dir: str) -> tuple:
+    """
+    Download ogbn-arxiv data DIRECTLY without OGB library problems.
+    Manually downloads and parses arxiv dataset.
+    Returns:
+        (A, X, y) — dense float32 adjacency, float32 features, int64 labels
+    """
+    import pickle
+    import urllib.request
+    import zipfile
+    
+    os.makedirs(base_dir, exist_ok=True)
+    
+    # Check cache first
+    adj_path = os.path.join(base_dir, "adj.pt")
+    fea_path = os.path.join(base_dir, "fea.pt")
+    label_path = os.path.join(base_dir, "label.pt")
+    
+    if os.path.exists(adj_path) and os.path.exists(fea_path) and os.path.exists(label_path):
+        print(f"  [direct] Loading cached ogbn-arxiv")
+        A = torch.load(adj_path)
+        X = torch.load(fea_path).to(torch.float32)
+        y = torch.load(label_path)
+        return A, X, y
+    
+    print(f"  [direct] Downloading ogbn-arxiv from Stanford...")
+    
+    # Download zip file
+    base_url = "http://snap.stanford.edu/ogb/data/nodeproppred/"
+    zip_filename = "ogbn_arxiv.zip"
+    zip_path = os.path.join(base_dir, zip_filename)
+    
+    if not os.path.exists(zip_path):
+        url = base_url + zip_filename
+        try:
+            urllib.request.urlretrieve(url, zip_path)
+            print(f"    Downloaded successfully ({os.path.getsize(zip_path) / 1024 / 1024:.1f} MB)")
+        except Exception as e:
+            raise RuntimeError(f"Failed to download from {url}: {e}") from e
+    
+    # Extract zip file
+    print(f"  [direct] Extracting data...")
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as z:
+            z.extractall(base_dir)
+    except Exception as e:
+        raise RuntimeError(f"Failed to extract {zip_path}: {e}") from e
+    
+    # Find extracted directory
+    arxiv_dir = os.path.join(base_dir, "ogbn_arxiv", "raw")
+    if not os.path.exists(arxiv_dir):
+        arxiv_dir = os.path.join(base_dir, "raw")
+    
+    # Load graph data
+    graph_path = os.path.join(arxiv_dir, "data.pkl")
+    if not os.path.exists(graph_path):
+        graph_path = os.path.join(arxiv_dir,  "graph.pkl")
+    
+    print(f"  [direct] Loading graph from {graph_path}...")
+    with open(graph_path, 'rb') as f:
+        graph = pickle.load(f, encoding='latin1')
+    
+    if not isinstance(graph, dict) or 'node_feat' not in graph:
+        raise RuntimeError(f"Unexpected graph format")
+    
+    X = graph['node_feat'].astype(np.float32)
+    edge_index = graph['edge_index']
+    N = X.shape[0]
+    
+    # Build adjacency
+    A = np.zeros((N, N), dtype=np.float32)
+    for i, j in zip(edge_index[0], edge_index[1]):
+        if i < N and j < N:
+            A[i, j] = 1.0
+    np.fill_diagonal(A, 0.0)
+    
+    # Load labels
+    label_path_src = os.path.join(arxiv_dir, "node-label.npy")
+    if not os.path.exists(label_path_src):
+        label_path_src = os.path.join(arxiv_dir, "label.npy")
+    y = np.load(label_path_src).flatten().astype(np.int64)
+    
+    # Convert to torch
+    X = torch.from_numpy(X).to(torch.float32)
+    A = torch.from_numpy(A).to(torch.float32)
+    y = torch.from_numpy(y).to(torch.int64)
+    
+    print(f"  [direct] Loaded: {N} nodes, {int(A.sum().item()//2)} edges, {X.shape[1]} features, {int(y.max())+1} classes")
+    
+    # Cache
+    torch.save(A, adj_path)
+    torch.save(X, fea_path)
+    torch.save(y, label_path)
+    print(f"  [direct] Cached to {base_dir}")
+    
+    return A, X, y
+
+
 def _load_or_download_ogb(
     name: str,
     root: str = None,
 ) -> tuple:
     """
-    Load an Open Graph Benchmark (OGB) dataset, downloading via ogb if needed.
+    Load an Open Graph Benchmark (OGB) dataset, downloading if needed.
 
     Supported datasets:
         ogbn-arxiv  (Citation network, ~169K nodes, ~1M edges)
-        ogbn-products, ogbn-papers100M, etc.
 
     The data are cached as `data/ogb/{name}/{adj,fea,label}.pt` for fast re-loading.
 
@@ -453,73 +552,89 @@ def _load_or_download_ogb(
     fea_path   = os.path.join(cache_dir, "fea.pt")
     label_path = os.path.join(cache_dir, "label.pt")
 
-    # ---- Fast path: load from cache ----------------------------------------
+    # Fast path: load from cache
     if os.path.exists(adj_path) and os.path.exists(fea_path) and os.path.exists(label_path):
-        print(f"[get_dataset] Loading cached OGB dataset '{name}' from {cache_dir}")
+        print(f"[get_dataset] Loading cached OGB dataset '{name}'")
         A = torch.load(adj_path)
         X = torch.load(fea_path).to(torch.float32)
         y = torch.load(label_path)
         return A, X, y
 
-    # ---- Slow path: download via OGB and convert ----------------
-    print(f"[get_dataset] Downloading OGB dataset '{name}' ...")
+    print(f"[get_dataset] Downloading OGB dataset '{name}'...")
+    
+    # Try direct download for ogbn-arxiv first
+    if name == 'ogbn-arxiv':
+        try:
+            return _load_ogbn_arxiv_direct(cache_dir)
+        except Exception as e:
+            print(f"  Direct download failed: {e}")
+            print(f"  Trying OGB library as fallback...")
+    
+    # Fallback: Use OGB library
     try:
-        # Defer imports and suppress warnings/JIT issues
         import warnings
-        import os as os_module
-        
-        # Set environment to suppress JIT compilation
-        os_module.environ['TORCH_JIT_IGNORE_LCHECK'] = '1'
-        
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore')
-            warnings.filterwarnings('ignore', category=DeprecationWarning)
             from ogb.nodeproppred import NodePropPredDataset
             from torch_geometric.utils import to_dense_adj
     except (ImportError, RuntimeError, OSError) as e:
         raise ImportError(
-            f"ogb and torch_geometric are required for OGB datasets. \n"
-            f"Install them with:  pip install ogb torch_geometric\n"
-            f"Or try older versions: pip install 'torch_geometric==2.3.0' ogb\n"
+            f"ogb and torch_geometric required. Install with: pip install ogb torch_geometric\n"
             f"Error: {e}"
         ) from e
 
     download_root = root if root is not None else os.path.join(base_dir, "_ogb_downloads")
+    
+    # Monkey-patch torch.load for PyTorch 2.6+
+    _original_torch_load = torch.load
+    def _patched_torch_load(f, *args, **kwargs):
+        if 'weights_only' not in kwargs:
+            kwargs['weights_only'] = False
+        return _original_torch_load(f, *args, **kwargs)
+    
     try:
+        torch.load = _patched_torch_load
+        
         dataset = NodePropPredDataset(name=name, root=download_root)
         split_idx = dataset.get_idx_split()
         data = dataset[0]
-        N = data.num_nodes
-    except (RuntimeError, OSError, TypeError) as e:
+        
+        # Handle tuple returns
+        if isinstance(data, tuple) and isinstance(data[0], dict) and 'num_nodes' in data[0]:
+            graph_dict = data[0]
+            N = graph_dict['num_nodes']
+            edge_index = graph_dict['edge_index']
+            X = torch.from_numpy(graph_dict['node_feat']).to(torch.float32)
+            y = torch.from_numpy(data[1].flatten()).to(torch.int64) if len(data) > 1 else None
+            A = torch.zeros((N, N), dtype=torch.float32)
+            for i, j in zip(edge_index[0], edge_index[1]):
+                A[i, j] = 1.0
+            A.fill_diagonal_(0.0)
+        else:
+            N = data.num_nodes
+            A = to_dense_adj(data.edge_index, max_num_nodes=N).squeeze(0)
+            A = (A + A.t()).clamp(max=1.0)
+            A.fill_diagonal_(0.0)
+            X = data.x.to(torch.float32)
+            y = data.y.squeeze(-1).to(torch.int64)
+        
+        num_classes = int(y.max().item()) + 1
+        print(f"  Nodes: {N}, Edges: {int(A.sum().item()//2)}, Features: {X.shape[1]}, Classes: {num_classes}")
+        
+        # Cache
+        os.makedirs(cache_dir, exist_ok=True)
+        torch.save(A, adj_path)
+        torch.save(X, fea_path)
+        torch.save(y, label_path)
+        print(f"  Cached to {cache_dir}")
+
+        return A, X, y
+    except (RuntimeError, OSError, TypeError, AttributeError) as e:
         raise RuntimeError(
-            f"Failed to download OGB dataset '{name}'. \n"
-            f"This may be due to torch_geometric version incompatibility. \n"
-            f"Try upgrading: pip install --upgrade torch_geometric ogb\n"
-            f"Or try downgrading: pip install 'torch_geometric==2.3.0'\n"
-            f"Error: {e}"
+            f"Failed to load OGB dataset '{name}': {e}"
         ) from e
-
-    # Convert to dense adjacency for consistency with codebase
-    A = to_dense_adj(data.edge_index, max_num_nodes=N).squeeze(0)
-    # Ensure symmetry and no self-loops
-    A = (A + A.t()).clamp(max=1.0)
-    A.fill_diagonal_(0.0)
-
-    X = data.x.to(torch.float32)  # [N, F]
-    y = data.y.squeeze(-1).to(torch.int64)  # [N]
-
-    num_classes = int(y.max().item()) + 1
-    print(f"  Nodes: {N}, Edges: {int(A.sum().item()//2)}, "
-          f"Features: {X.shape[1]}, Classes: {num_classes}")
-
-    # Cache to disk
-    os.makedirs(cache_dir, exist_ok=True)
-    torch.save(A, adj_path)
-    torch.save(X, fea_path)
-    torch.save(y, label_path)
-    print(f"  Cached to {cache_dir}")
-
-    return A, X, y
+    finally:
+        torch.load = _original_torch_load
 
 
 def _load_npz(path: str):
