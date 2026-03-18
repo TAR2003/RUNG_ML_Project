@@ -138,7 +138,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--gamma_lr_factor", type=float, default=0.3,
-    help="LR multiplier for gamma params in RUNG_learnable_gamma (default: 0.2).",
+    help="LR multiplier for gamma params in learnable-gamma variants (default: 0.3).",
 )
 parser.add_argument(
     "--gamma_mode", type=str, default="per_layer",
