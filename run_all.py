@@ -122,11 +122,11 @@ parser.add_argument(
 # ===== EXTENDED ATTACK BUDGETS =====
 parser.add_argument(
     "--budgets", type=float, nargs="+", 
-    default=[0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00],
+    default=[0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.60, 0.80, 1.00],
     metavar="BUDGET",
     help=(
         "Attack budgets (as fraction of edges). "
-        "Default: 0.05 0.10 0.20 0.30 0.40 0.50 0.60 0.70 0.80 0.90 1.00"
+        "Default: 0.05 0.10 0.15 0.20 0.25 0.30 0.40 0.60 0.80 1.00"
     ),
 )
 
