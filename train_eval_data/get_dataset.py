@@ -432,7 +432,7 @@ def load_heterophilic_dataset(name: str, root: str = None, split_seed: int = 42)
 def _load_ogbn_arxiv_direct(base_dir: str) -> tuple:
     """
     Download ogbn-arxiv data DIRECTLY without OGB library problems.
-    Manually downloads and parses arxiv dataset.
+    Manually downloads and parses arxiv dataset using multiple mirror URLs.
     Returns:
         (A, X, y) — dense float32 adjacency, float32 features, int64 labels
     """
@@ -454,20 +454,44 @@ def _load_ogbn_arxiv_direct(base_dir: str) -> tuple:
         y = torch.load(label_path)
         return A, X, y
     
-    print(f"  [direct] Downloading ogbn-arxiv from Stanford...")
+    print(f"  [direct] Downloading ogbn-arxiv...")
     
-    # Download zip file
-    base_url = "http://snap.stanford.edu/ogb/data/nodeproppred/"
+    # Try multiple mirror URLs
+    urls = [
+        "https://data.pyg.org/datasets/ogbn_arxiv.zip",                   # PyG mirror
+        "http://snap.stanford.edu/ogb/data/nodeproppred/ogbn_arxiv.zip",  # Original Stanford
+        "https://ogb.stanford.edu/data/nodeproppred/ogbn_arxiv.zip",      # HTTPS version
+    ]
+    
     zip_filename = "ogbn_arxiv.zip"
     zip_path = os.path.join(base_dir, zip_filename)
     
     if not os.path.exists(zip_path):
-        url = base_url + zip_filename
-        try:
-            urllib.request.urlretrieve(url, zip_path)
-            print(f"    Downloaded successfully ({os.path.getsize(zip_path) / 1024 / 1024:.1f} MB)")
-        except Exception as e:
-            raise RuntimeError(f"Failed to download from {url}: {e}") from e
+        last_error = None
+        for url in urls:
+            try:
+                print(f"    Trying: {url}")
+                # Use urlopen with timeout instead of urlretrieve
+                req = urllib.request.Request(url)
+                req.add_header('User-Agent', 'Mozilla/5.0')
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    with open(zip_path, 'wb') as out_file:
+                        out_file.write(response.read())
+                print(f"    Downloaded successfully ({os.path.getsize(zip_path) / 1024 / 1024:.1f} MB)")
+                break
+            except Exception as e:
+                last_error = e
+                print(f"    Failed ({type(e).__name__}: {str(e)[:60]})")
+                # Clean up partial download
+                if os.path.exists(zip_path):
+                    try:
+                        os.remove(zip_path)
+                    except:
+                        pass
+                continue
+        else:
+            # All URLs failed
+            raise RuntimeError(f"Failed to download from all mirrors. Last error: {last_error}") from last_error
     
     # Extract zip file
     print(f"  [direct] Extracting data...")
@@ -571,8 +595,12 @@ def _load_or_download_ogb(
             print(f"  Trying OGB library as fallback...")
     
     # Fallback: Use OGB library
+    print(f"  [ogb-fallback] Attempting to use OGB library...")
     try:
         import warnings
+        import subprocess
+        import io
+        
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore')
             from ogb.nodeproppred import NodePropPredDataset
@@ -595,9 +623,24 @@ def _load_or_download_ogb(
     try:
         torch.load = _patched_torch_load
         
-        dataset = NodePropPredDataset(name=name, root=download_root)
-        split_idx = dataset.get_idx_split()
-        data = dataset[0]
+        print(f"    Loading dataset '{name}' (this may take 2-3 minutes on first run)...")
+        
+        # Monkey-patch input() to auto-answer prompts
+        import builtins
+        _original_input = builtins.input
+        def _patched_input(prompt=""):
+            print(prompt, end='', flush=True)
+            print("y", flush=True)  # Auto-answer "yes" to update prompts
+            return "y"
+        builtins.input = _patched_input
+        
+        try:
+            dataset = NodePropPredDataset(name=name, root=download_root)
+            print(f"    Dataset loaded successfully")
+            split_idx = dataset.get_idx_split()
+            data = dataset[0]
+        finally:
+            builtins.input = _original_input
         
         # Handle tuple returns
         if isinstance(data, tuple) and isinstance(data[0], dict) and 'num_nodes' in data[0]:
@@ -606,20 +649,67 @@ def _load_or_download_ogb(
             edge_index = graph_dict['edge_index']
             X = torch.from_numpy(graph_dict['node_feat']).to(torch.float32)
             y = torch.from_numpy(data[1].flatten()).to(torch.int64) if len(data) > 1 else None
-            A = torch.zeros((N, N), dtype=torch.float32)
-            for i, j in zip(edge_index[0], edge_index[1]):
-                A[i, j] = 1.0
-            A.fill_diagonal_(0.0)
+            
+            # For large graphs, use sparse format to save memory
+            if N > 100000:
+                print(f"    Converting to sparse format for memory efficiency...")
+                # Build sparse COO format instead of dense
+                edges_src = edge_index[0]
+                edges_dst = edge_index[1]
+                A_indices = np.stack([edges_src, edges_dst])
+                A_values = np.ones(len(edges_src))
+                A = sp.coo_matrix((A_values, (edges_src, edges_dst)), shape=(N, N))
+                A = A.tocsr()  # Convert to CSR for efficient operations
+            else:
+                A = torch.zeros((N, N), dtype=torch.float32)
+                for i, j in zip(edge_index[0], edge_index[1]):
+                    A[i, j] = 1.0
+                A.fill_diagonal_(0.0)
         else:
             N = data.num_nodes
-            A = to_dense_adj(data.edge_index, max_num_nodes=N).squeeze(0)
-            A = (A + A.t()).clamp(max=1.0)
-            A.fill_diagonal_(0.0)
+            
+            # For large graphs, use sparse format to save memory
+            if N > 100000:
+                print(f"    Graph has {N} nodes - using sparse format for memory efficiency...")
+                # Use edge_index directly instead of converting to dense
+                edges_src = data.edge_index[0].numpy()
+                edges_dst = data.edge_index[1].numpy()
+                A_values = np.ones(len(edges_src))
+                A = sp.coo_matrix((A_values, (edges_src, edges_dst)), shape=(N, N))
+                A = A.tocsr()  # Convert to CSR
+            else:
+                # For smaller graphs, use dense format
+                A = to_dense_adj(data.edge_index, max_num_nodes=N).squeeze(0)
+                A = (A + A.t()).clamp(max=1.0)
+                A.fill_diagonal_(0.0)
+            
             X = data.x.to(torch.float32)
             y = data.y.squeeze(-1).to(torch.int64)
         
-        num_classes = int(y.max().item()) + 1
-        print(f"  Nodes: {N}, Edges: {int(A.sum().item()//2)}, Features: {X.shape[1]}, Classes: {num_classes}")
+        if isinstance(A, sp.spmatrix):
+            # Large sparse graphs can't be converted to dense
+            raise RuntimeError(
+                f"\n{'='*70}\n"
+                f"ERROR: Dataset '{name}' is too large for current implementation\n"
+                f"{'='*70}\n"
+                f"Graph size: {N} nodes × {N} nodes (estimated {N*N*4/1024**3:.0f} GB for dense)\n\n"
+                f"RECOMMENDED SOLUTIONS:\n"
+                f"  ✓ Use smaller datasets (all work well with current code):\n"
+                f"    - cora:      2,485 nodes\n"
+                f"    - citeseer:  3,327 nodes  \n"
+                f"    - pubmed:   19,717 nodes\n"
+                f"    - chameleon: 2,277 nodes\n"
+                f"    - actor:     7,600 nodes\n\n"
+                f"  For ogbn-arxiv specifically, you need to:\n"
+                f"    1. Implement sparse tensor support in the training code, OR\n"
+                f"    2. Use a system with >114 GB RAM\n"
+                f"\n  Command to use cora instead:\n"
+                f"    python run_all.py --datasets cora --models RUNG\n"
+                f"{'='*70}\n"
+            )
+        
+        num_classes = int(y.max().item()) + 1 if hasattr(y, 'max') else int(y.max())+1
+        print(f"  Nodes: {N}, Edges: {int(A.sum().item()//2) if isinstance(A, torch.Tensor) else A.nnz//2}, Features: {X.shape[1]}, Classes: {num_classes}")
         
         # Cache
         os.makedirs(cache_dir, exist_ok=True)
@@ -629,9 +719,14 @@ def _load_or_download_ogb(
         print(f"  Cached to {cache_dir}")
 
         return A, X, y
-    except (RuntimeError, OSError, TypeError, AttributeError) as e:
+    except Exception as e:
         raise RuntimeError(
-            f"Failed to load OGB dataset '{name}': {e}"
+            f"Failed to load OGB dataset '{name}': {e}\n\n"
+            f"Solution options:\n"
+            f"  1. Check your internet connection\n"
+            f"  2. Try again (may be temporary server issue)\n"
+            f"  3. Run: pip install --upgrade ogb torch_geometric\n"
+            f"  4. If on GPU cluster, datasets may be pre-cached in shared storage\n"
         ) from e
     finally:
         torch.load = _original_torch_load
