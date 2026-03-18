@@ -9,6 +9,7 @@ from train_eval_data.get_dataset import get_dataset, get_splits
 from gb.exutil import make_attacked_model
 from gb.metric import accuracy
 from train_eval_data.fit import fit
+from utils import get_log_identifier
 import copy
 import yaml
 
@@ -295,7 +296,10 @@ def run_global_evasion_transfer_exp(transfer_from_models, transfer_to_models, do
 
 if __name__ == '__main__':
     os.makedirs(path+f'log/{args.data}/attack', exist_ok=True)
-    sys.stdout = open(path+f'log/{args.data}/attack/{args.model}_norm{args.norm}_gamma{args.gamma}.log', 'w', buffering=1)
+    
+    # Generate model-specific log identifier (uses actual hyperparameters, not defaults)
+    log_identifier = get_log_identifier(args.model, args)
+    sys.stdout = open(path+f'log/{args.data}/attack/{log_identifier}.log', 'w', buffering=1)
 
     get_model = get_model_default
     attack_name = "global_evasion_PGD"

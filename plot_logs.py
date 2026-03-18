@@ -66,48 +66,203 @@ _RE_ATK_LINE   = re.compile(r"^\s*Attacked:\s*([\d.]+)[^±]*±([\d.]+)", re.UNIC
 # Label builder
 # ---------------------------------------------------------------------------
 
+def _parse_model_identifier(stem: str) -> dict:
+    """
+    Parse a model-specific log identifier into a structured dict.
+    
+    Supports new formats like:
+      - RUNG_normMCP_gamma6.0
+      - RUNG_percentile_gamma_q0.75
+      - RUNG_learnable_distance_q0.75_distcosine
+      - RUNG_learnable_gamma_inituniform_reg0.0
+      - RUNG_parametric_gamma_decay0.85_reg0.0
+      - RUNG_combined_model_q0.75_decay0.85_a0.5
+      - RUNG_learnable_combined_modeper_layer
+      - (and legacy formats like RUNG_MCP_6.0)
+    
+    Returns dict with 'model' and recognized hyperparams.
+    """
+    
+    # Try to detect model name and extract it
+    # Known model names in priority order (longest first to avoid conflicts)
+    known_models = [
+        'RUNG_combined_model', 'RUNG_learnable_distance', 'RUNG_learnable_combined',
+        'RUNG_learnable_gamma', 'RUNG_parametric_gamma', 'RUNG_percentile_gamma',
+        'RUNG_percentile_adv_v2', 'RUNG_percentile_adv', 'RUNG_parametric_adv',
+        'RUNG_new_ADAPTIVE', 'RUNG_new_SCAD', 'RUNG_new_L1', 'RUNG_new_L2',
+        'RUNG_SCAD', 'RUNG_L1', 'RUNG_L2', 'RUNG_new', 'RUNG',
+        'RUNG_confidence_lambda', 'RUNG_combined',
+        'APPNP', 'GAT', 'GCN', 'MLP', 'L1'
+    ]
+    
+    model_name = None
+    remainder = stem
+    
+    for candidate in known_models:
+        if stem.startswith(candidate + "_") or stem == candidate:
+            model_name = candidate
+            if stem.startswith(candidate + "_"):
+                remainder = stem[len(candidate) + 1:]
+            else:
+                remainder = ""
+            break
+    
+    if model_name is None:
+        # Fallback: assume first part is model name
+        parts = stem.split("_", 1)
+        model_name = parts[0]
+        remainder = parts[1] if len(parts) > 1 else ""
+    
+    result = {"model": model_name}
+    
+    # Parse remainder based on model type
+    if not remainder:
+        return result
+    
+    # Parse different hyperparameter patterns
+    # Pattern: key<value> or key<value>_key<value>
+    
+    # Old-style: norm<X>_gamma<X>
+    m = re.match(r"norm(.+?)(?:_gamma([\d.]+))?$", remainder)
+    if m:
+        result['norm'] = m.group(1)
+        if m.group(2):
+            result['gamma'] = m.group(2)
+        return result
+    
+    # Percentile style: q<X> (and optionally qLate<X>)
+    # Match q followed by digits and optional dot and digits
+    if "q" in remainder:
+        m = re.search(r"q([\d.]+)", remainder)
+        if m:
+            result['percentile_q'] = m.group(1)
+        m = re.search(r"qLate([\d.]+)", remainder)
+        if m:
+            result['percentile_q_late'] = m.group(1)
+    
+    # Distance mode: dist<X> where X is letters only
+    if "dist" in remainder:
+        m = re.search(r"dist([a-z]+)", remainder)
+        if m:
+            result['dist_mode'] = m.group(1)
+    
+    # Projection: proj<X> where X is digits
+    if "proj" in remainder:
+        m = re.search(r"proj(\d+)", remainder)
+        if m:
+            result['proj_dim'] = m.group(1)
+    
+    # Decay rate: decay<X>
+    if "decay" in remainder:
+        m = re.search(r"decay([\d.]+)", remainder)
+        if m:
+            result['decay_rate'] = m.group(1)
+    
+    # Alpha blend: a<X> (at end or before underscore)
+    if "_a" in remainder:
+        m = re.search(r"_a([\d.]+)", remainder)
+        if m:
+            result['alpha_blend'] = m.group(1)
+    
+    # Regularization: reg<X>
+    if "reg" in remainder:
+        m = re.search(r"reg([\d.]+)", remainder)
+        if m:
+            result['reg_strength'] = m.group(1)
+    
+    # Init strategy: init<X> where X is letters
+    if "init" in remainder:
+        m = re.search(r"init([a-z]+)", remainder)
+        if m:
+            result['init_strategy'] = m.group(1)
+    
+    # Mode: mode<X> where X is letters
+    if "mode" in remainder:
+        m = re.search(r"mode(\w+)", remainder)
+        if m:
+            result['mode'] = m.group(1)
+    
+    # Confidence mode: prot/symm
+    if any(x in result.get('model', '') for x in ['confidence', 'lambda']):
+        if "prot" in remainder:
+            result['conf_mode'] = "protect_uncertain" if "uncertain" in remainder else "protect_*"
+        elif "symm" in remainder:
+            result['conf_mode'] = "symmetric"
+    
+    return result
+
+
 def _attack_label(stem: str) -> str:
     """Convert an attack log filename stem into a readable label.
-
-    Supported formats:
-      - RUNG_normMCP_gamma6.0
-      - RUNG_new_SCAD_normSCAD_gamma6.0
-      - RUNG_parametric_gamma_MCP_6.0
-      - (other similar <model>_<norm>_<gamma> patterns)
-
-    The returned label is like:
-      RUNG (MCP, γ=6.0)
-      RUNG_new_SCAD (SCAD, γ=6.0)
+    
+    Handles new model-specific formats like:
+      - RUNG_normMCP_gamma6.0 → RUNG (MCP, γ=6.0)
+      - RUNG_percentile_gamma_q0.75 → RUNG_percentile_gamma (q=0.75)
+      - RUNG_learnable_distance_q0.75_distcosine → RUNG_learnable_distance (cosine, q=0.75)
+      - RUNG_combined_model_q0.75_decay0.85_a0.5 → RUNG_combined_model (u=0.75, r=0.85, a=0.5)
     """
-    # Preferred format: <model>_norm<norm>_gamma<gamma>
-    m = re.match(r"^(.+?)_norm(.+?)_gamma([\d.]+)$", stem)
-    if m:
-        model, norm, gamma = m.group(1), m.group(2), m.group(3)
+    info = _parse_model_identifier(stem)
+    model = info['model']
+    
+    # Build readable label based on model type
+    if 'norm' in info and 'gamma' in info:
+        # Standard penalty-based model
+        gamma_str = info['gamma'].rstrip("0").rstrip(".")
+        return f"{model} ({info['norm']}, γ={gamma_str})"
+    
+    elif model == 'RUNG_percentile_gamma' or (model == 'RUNG_combined' and 'percentile_q' in info):
+        # Percentile-based
+        q = info.get('percentile_q', '?').rstrip("0").rstrip(".")
+        if 'percentile_q_late' in info:
+            q_late = info['percentile_q_late'].rstrip("0").rstrip(".")
+            return f"{model} (q={q}, q_late={q_late})"
+        return f"{model} (q={q})"
+    
+    elif model == 'RUNG_learnable_distance':
+        # Distance-based with percentile
+        q = info.get('percentile_q', '?').rstrip("0").rstrip(".")
+        dist = info.get('dist_mode', 'cosine')
+        return f"{model} ({dist}, q={q})"
+    
+    elif model == 'RUNG_learnable_gamma':
+        # Learnable gamma
+        init_st = info.get('init_strategy', 'uniform')
+        reg = info.get('reg_strength', '?')
+        return f"{model} ({init_st}, reg={reg})"
+    
+    elif model == 'RUNG_parametric_gamma' or model == 'RUNG_parametric_adv':
+        # Parametric gamma
+        decay = info.get('decay_rate', '?').rstrip("0").rstrip(".")
+        return f"{model} (decay={decay})"
+    
+    elif model == 'RUNG_learnable_combined':
+        # Learnable combined
+        mode = info.get('mode', 'per_layer')
+        return f"{model} ({mode})"
+    
+    elif model == 'RUNG_combined_model':
+        # Combined model (parametric + percentile + cosine)
+        q = info.get('percentile_q', '?').rstrip("0").rstrip(".")
+        decay = info.get('decay_rate', '?').rstrip("0").rstrip(".")
+        alpha = info.get('alpha_blend', '?').rstrip("0").rstrip(".")
+        return f"{model} (q={q}, r={decay}, α={alpha})"
+    
+    elif 'confidence' in model.lower():
+        # Confidence-lambda
+        return f"{model}"
+    
     else:
-        # Fallback format: <model>_<norm>_<gamma>
-        parts = stem.rsplit("_", 2)
-        if len(parts) == 3:
-            model, norm, gamma = parts
-        else:
-            return stem   # unknown format; keep raw
-
-    # drop trailing .0 from gamma for display
-    gamma_str = gamma.rstrip("0").rstrip(".")
-    return f"{model} ({norm}, γ={gamma_str})"
+        # Fallback
+        return stem
 
 
 def _clean_label(stem: str) -> str:
     """
-    Convert a clean log filename stem such as  RUNG_MCP_6.0  into a label.
-    Format is   <model>_<norm>_<gamma>   where model may itself contain _.
+    Convert a clean log filename stem into a label.
+    Delegates to _attack_label for consistency.
     """
-    # Split off last two tokens (norm and gamma)
-    parts = stem.rsplit("_", 2)
-    if len(parts) == 3:
-        model, norm, gamma = parts
-        gamma_str = gamma.rstrip("0").rstrip(".")
-        return f"{model} ({norm}, γ={gamma_str})"
-    return stem
+    return _attack_label(stem)
+
 
 
 # ---------------------------------------------------------------------------

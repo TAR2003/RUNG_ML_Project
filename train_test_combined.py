@@ -18,7 +18,7 @@ from gb.attack.gd import proj_grad_descent
 from gb.metric import margin
 from gb.pert import edge_diff_matrix
 from train_eval_data.get_dataset import get_dataset, get_splits
-from utils import accuracy
+from utils import accuracy, get_log_identifier
 
 
 # Default budget array (if not provided via CLI)
@@ -145,8 +145,14 @@ def _run_one_dataset(args, dataset):
     os.makedirs(f"log/{dataset}/clean", exist_ok=True)
     os.makedirs(f"log/{dataset}/attack", exist_ok=True)
 
-    clean_log_path = f"log/{dataset}/clean/RUNG_combined_MCP_{args.percentile_q}.log"
-    attack_log_path = f"log/{dataset}/attack/RUNG_combined_normMCP_gamma{args.percentile_q}.log"
+    # Generate model-specific log identifier for RUNG_combined
+    # Ensure args has model attribute for the identifier function
+    if not hasattr(args, 'model'):
+        args.model = 'RUNG_combined'
+    
+    log_identifier = get_log_identifier(args.model, args)
+    clean_log_path = f"log/{dataset}/clean/{log_identifier}.log"
+    attack_log_path = f"log/{dataset}/attack/{log_identifier}.log"
 
     clean_fh = open(clean_log_path, "w", buffering=1)
     attack_fh = open(attack_log_path, "w", buffering=1)

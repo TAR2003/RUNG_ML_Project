@@ -21,7 +21,7 @@ from exp.config.get_model_citeseer import get_model_default_citeseer
 from exp.config.get_model import get_model_default
 # dataset, train and eval
 from train_eval_data.get_dataset import get_dataset, get_splits
-from utils import accuracy
+from utils import accuracy, get_log_identifier
 import copy
 import yaml
 from exp.result_io import save_acc, rep_save_model
@@ -405,7 +405,10 @@ def make_clean_model_and_save(do_save_model=False, do_save_acc=False, rep_num=5,
 if __name__ == '__main__':
 
     os.makedirs(path+f'log/{args.data}/clean', exist_ok=True)
-    sys.stdout = open(path+f'log/{args.data}/clean/{args.model}_{args.norm}_{args.gamma}.log', 'w', buffering=1)
+    
+    # Generate model-specific log identifier (uses actual hyperparameters, not defaults)
+    log_identifier = get_log_identifier(args.model, args)
+    sys.stdout = open(path+f'log/{args.data}/clean/{log_identifier}.log', 'w', buffering=1)
     
 
     get_model = get_model_default
