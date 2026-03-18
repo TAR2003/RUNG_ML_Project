@@ -11,6 +11,7 @@ from train_eval_data.fit_combined_model import fit_combined_model
 from train_eval_data.fit_confidence_lambda import fit_confidence_lambda
 from train_eval_data.fit_percentile_gamma import fit_percentile_gamma
 from train_eval_data.fit_learnable_distance import fit_learnable_distance
+from train_eval_data.fit_learnable_combined import fit_learnable_combined
 from train_eval_data.fit_percentile_adv import fit_percentile_adv
 from train_eval_data.fit_percentile_adv_v2 import fit_percentile_adv_v2
 from train_eval_data.fit_parametric_adv import fit_parametric_adv
@@ -56,7 +57,7 @@ parser.add_argument('--gamma_init_strategy', type=str, default='uniform',
                     help='How to initialise gamma across layers for RUNG_learnable_gamma. '
                          'decreasing is theoretically motivated by shrinking feature '
                          'differences with depth.')
-parser.add_argument('--gamma_lr_factor', type=float, default=0.2,
+parser.add_argument('--gamma_lr_factor', type=float, default=0.3,
                     help='LR multiplier for gamma parameters in RUNG_learnable_gamma. '
                          'gamma_lr = lr * gamma_lr_factor. Recommended range: 0.05–0.5.')
 parser.add_argument('--gamma_reg_strength', type=float, default=0.0,
@@ -126,6 +127,10 @@ parser.add_argument('--dist_lr_factor', type=float, default=0.5,
                     help='LR multiplier for distance module parameters in RUNG_learnable_distance. '
                          'Only used if distance_mode is projection or bilinear. '
                          'Default 0.5 = distance LR is half of base LR.')
+parser.add_argument('--gamma_mode', type=str, default='per_layer',
+                choices=['per_layer', 'schedule'],
+                help='Learnable gamma mode for RUNG_learnable_combined. '
+                    'per_layer = one gamma per layer, schedule = 2-parameter decay.')
 
 # RUNG_combined_model specific arguments
 parser.add_argument('--alpha_blend_init', type=float, default=0.5,
@@ -252,6 +257,12 @@ def clean_rep(model, train_param, dataset_name, seed=None):
                 dist_lr_factor=args.dist_lr_factor,
                 **train_param,
             )
+        elif args.model == 'RUNG_learnable_combined':
+            fit_learnable_combined(
+                cur_model, A, X, y, train_idx, val_idx,
+                gamma_lr_factor=args.gamma_lr_factor,
+                **train_param,
+            )
         elif args.model == 'RUNG_combined_model':
             fit_combined_model(
                 cur_model, A, X, y, train_idx, val_idx,
@@ -334,6 +345,8 @@ def make_clean_model_and_save(do_save_model=False, do_save_acc=False, rep_num=5,
         model_config['percentile_q_late'] = args.percentile_q_late
         model_config['distance_mode']     = args.distance_mode
         model_config['proj_dim']          = args.proj_dim
+    elif args.model == 'RUNG_learnable_combined':
+        model_config['gamma_mode'] = args.gamma_mode
     # Pass RUNG_combined_model-specific params into model config.
     elif args.model == 'RUNG_combined_model':
         model_config['percentile_q']      = args.percentile_q

@@ -63,6 +63,9 @@ parser.add_argument('--proj_dim', type=int, default=32,
                     help='Projection dimension for projection/bilinear modes (default: 32).')
 parser.add_argument('--dist_lr_factor', type=float, default=0.5,
                     help='LR multiplier for distance module (default: 0.5).')
+parser.add_argument('--gamma_mode', type=str, default='per_layer',
+                    choices=['per_layer', 'schedule'],
+                    help='Learnable gamma mode for RUNG_learnable_combined.')
 
 # RUNG_parametric_gamma specific arguments
 parser.add_argument('--decay_rate_init', type=float, default=0.85,
@@ -310,6 +313,8 @@ if __name__ == '__main__':
             model_params['percentile_q_late'] = args.percentile_q_late
             model_params['distance_mode']     = args.distance_mode
             model_params['proj_dim']          = args.proj_dim
+        elif args.model == 'RUNG_learnable_combined':
+            model_params['gamma_mode'] = args.gamma_mode
         elif args.model == 'RUNG_combined':
             model_params['percentile_q']      = args.percentile_q
             model_params['use_layerwise_q']   = args.use_layerwise_q

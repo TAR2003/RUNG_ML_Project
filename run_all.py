@@ -38,6 +38,7 @@ SUPPORTED MODELS (4 core models recommended):
     Advanced variants (4-model comparison):
         ★ RUNG_percentile_gamma     — Percentile-based adaptive gamma per layer
         ★ RUNG_learnable_distance   — Learnable distance metric (cosine/projection/bilinear)
+        ★ RUNG_learnable_combined   — Cosine distance + learnable gamma in (0,2)
         ★ RUNG_combined             — Percentile gamma + cosine distance
         ★ RUNG_combined_model       — Parametric + percentile gamma + cosine distance (NEW)
         ★ RUNG (default MCP)        — Baseline with fixed penalty
@@ -136,8 +137,13 @@ parser.add_argument(
     help="Gamma initialisation strategy for RUNG_learnable_gamma (default: uniform).",
 )
 parser.add_argument(
-    "--gamma_lr_factor", type=float, default=0.2,
+    "--gamma_lr_factor", type=float, default=0.3,
     help="LR multiplier for gamma params in RUNG_learnable_gamma (default: 0.2).",
+)
+parser.add_argument(
+    "--gamma_mode", type=str, default="per_layer",
+    choices=["per_layer", "schedule"],
+    help="Gamma mode for RUNG_learnable_combined (default: per_layer).",
 )
 parser.add_argument(
     "--gamma_reg_strength", type=float, default=0.0,
@@ -365,6 +371,12 @@ def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
                 f"--proj_dim={args.proj_dim}",
                 f"--dist_lr_factor={args.dist_lr_factor}",
             ]
+
+        elif model == "RUNG_learnable_combined":
+            cmd += [
+                f"--gamma_mode={args.gamma_mode}",
+                f"--gamma_lr_factor={args.gamma_lr_factor}",
+            ]
         
         elif model == "RUNG_combined_model":
             cmd += [
@@ -484,6 +496,7 @@ print(f"  Model-specific configuration:")
 print(f"    RUNG & RUNG_learnable_gamma:  MCP/SCAD penalty, gamma={args.gamma}")
 print(f"    RUNG_percentile_gamma:        Percentile-based gamma, percentile_q={args.percentile_q}")
 print(f"    RUNG_learnable_distance:      Distance={args.distance_mode}, percentile_q={args.percentile_q}")
+print(f"    RUNG_learnable_combined:      Cosine + gamma_mode={args.gamma_mode}, gamma_lr_factor={args.gamma_lr_factor}")
 print(f"    RUNG_combined:                Cosine distance + percentile_q={args.percentile_q}")
 print(f"    RUNG_combined_model:          Parametric + percentile gamma + cosine, α={args.alpha_blend_init}, r={args.decay_rate_init}")
 print(f"    Attack budgets:               {args.budgets}")

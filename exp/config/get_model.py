@@ -17,6 +17,7 @@ from model.rung_parametric_gamma import RUNG_parametric_gamma
 from model.rung_confidence_lambda import RUNG_confidence_lambda
 from model.rung_percentile_gamma import RUNG_percentile_gamma
 from model.rung_learnable_distance import RUNG_learnable_distance
+from model.rung_learnable_combined import RUNG_learnable_combined
 from model.rung_combined import RUNG_combined
 from model.rung_combined_model import RUNG_combined_model
 
@@ -272,6 +273,24 @@ def get_model_default(
             dropout           = dropout,
         ).to(device)
         return model_ld, custom_fit_params
+    elif model_name == 'RUNG_learnable_combined':
+        # RUNG with cosine distance and learnable gamma constrained to (0,2).
+        scad_a             = custom_model_params.get('scad_a', 3.7)
+        prop_step          = custom_model_params.get('prop_step', 10)
+        dropout            = custom_model_params.get('dropout', 0.5)
+        lam_hat            = custom_model_params.get('lam_hat', 0.9)
+        gamma_mode         = custom_model_params.get('gamma_mode', 'per_layer')
+        model_lc = RUNG_learnable_combined(
+            in_dim            = D,
+            out_dim           = C,
+            hidden_dims       = [64],
+            lam_hat           = lam_hat,
+            gamma_mode        = gamma_mode,
+            scad_a            = scad_a,
+            prop_step         = prop_step,
+            dropout           = dropout,
+        ).to(device)
+        return model_lc, custom_fit_params
     elif model_name == 'RUNG_combined':
         # RUNG with cosine distance + percentile gamma — zero new parameters.
         # Combines the two strongest independent improvements:
@@ -375,7 +394,7 @@ def get_model_default(
             f"Valid choices: RUNG, RUNG_new, RUNG_new_SCAD, RUNG_new_L1, "
             f"RUNG_new_L2, RUNG_new_ADAPTIVE, RUNG_learnable_gamma, "
             f"RUNG_parametric_gamma, RUNG_confidence_lambda, RUNG_percentile_gamma, "
-            f"RUNG_learnable_distance, RUNG_combined, RUNG_combined_model, "
+            f"RUNG_learnable_distance, RUNG_learnable_combined, RUNG_combined, RUNG_combined_model, "
             f"RUNG_percentile_adv, RUNG_parametric_adv, "
             f"GCN, GAT, APPNP, L1, MLP."
         )
