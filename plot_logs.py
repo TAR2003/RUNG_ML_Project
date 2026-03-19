@@ -2,18 +2,23 @@
 """
 plot_logs.py — Read all log files and generate figures automatically.
 
-Scans log/<dataset>/clean/ and log/<dataset>/attack/ for *every* log written
-by run_all.py (clean.py + attack.py), extracts the accuracy numbers, and
-produces:
+Scans log/<dataset>/clean/, log/<dataset>/attack/, and log/<dataset>/cosine_attack/
+for *every* log written by run_all.py and cosine_attack.py, extracts the accuracy 
+numbers, and produces:
 
-  figures/robustness_<dataset>.png
-      One figure per dataset.  X-axis = attack-budget ratio, Y-axis = accuracy.
-      Budget 0 is the clean (unattacked) accuracy; subsequent points are the
-      attacked accuracy at each budget.  Each model gets its own coloured line
-      with ±1 std shading.
+  figures/attack/robustness_<dataset>.png
+      Robustness curves for standard attacks.
 
-  figures/clean_accuracy.png
-      Bar chart comparing clean accuracy across all models and datasets.
+  figures/cosine_attack/robustness_<dataset>.png
+      Robustness curves for cosine attacks only.
+
+  figures/attack/clean_accuracy.png
+      Bar chart for standard attacks.
+
+  figures/cosine_attack/clean_accuracy.png
+      Bar chart for cosine attacks.
+
+Each folder contains the same structure of graphs filtered by attack type.
 
 Usage
 -----
@@ -47,6 +52,12 @@ args = parser.parse_args()
 LOG_DIR = Path(args.log_dir)
 OUT_DIR = Path(args.out_dir)
 OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Create attack-type-specific output directories
+OUT_DIR_ATTACK = OUT_DIR / "attack"
+OUT_DIR_COSINE = OUT_DIR / "cosine_attack"
+OUT_DIR_ATTACK.mkdir(parents=True, exist_ok=True)
+OUT_DIR_COSINE.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # Regex helpers
@@ -420,43 +431,55 @@ def _detect_log_type(path: Path) -> str:
 
 # Structure we build:
 #   attack_data[dataset][label] = { budget: {clean_mean,clean_std,atk_mean,atk_std} }
+#   cosine_attack_data[dataset][label] = { budget: {clean_mean,clean_std,atk_mean,atk_std} }
 #   clean_data[dataset][label]  = (mean, std)
 
 attack_data: dict[str, dict[str, dict]] = defaultdict(dict)
+cosine_attack_data: dict[str, dict[str, dict]] = defaultdict(dict)
 clean_data:  dict[str, dict[str, tuple]] = defaultdict(dict)
 
 if not LOG_DIR.exists():
     print(f"ERROR: log directory '{LOG_DIR}' does not exist.")
     sys.exit(1)
 
-for dataset_dir in sorted(LOG_DIR.iterdir()):
-    if not dataset_dir.is_dir():
-        continue
-    dataset = dataset_dir.name
-
-    # ── attack logs ────────────────────────────────────────────────────────
-    attack_dir = dataset_dir / "attack"
+# Helper function to process attack logs from a specific attack type directory
+def process_attack_logs(dataset_dir, dataset, attack_subdir_name, target_dict):
+    """
+    Process attack logs from a specific subdirectory (attack or cosine_attack).
+    """
+    attack_dir = dataset_dir / attack_subdir_name
     if attack_dir.is_dir():
         for log_file in sorted(attack_dir.glob("*.log")):
             log_type = _detect_log_type(log_file)
             
             # If it's actually clean data in attack dir, skip it here
-            # (it will be picked up in clean_dir processing if it exists there)
             if log_type == "clean":
-                print(f"  [attack] {dataset}/{log_file.name}  →  detected as clean format (skipped from attack)")
+                print(f"  [{attack_subdir_name}] {dataset}/{log_file.name}  →  detected as clean format (skipped from {attack_subdir_name})")
                 continue
             
             if log_type == "attack":
                 label   = _attack_label(log_file.stem)
                 budgets = parse_attack_log(log_file)
                 if budgets:
-                    attack_data[dataset][label] = budgets
-                    print(f"  [attack] {dataset}/{log_file.name}  →  "
+                    target_dict[dataset][label] = budgets
+                    print(f"  [{attack_subdir_name}] {dataset}/{log_file.name}  →  "
                           f"{len(budgets)} budget(s)  label='{label}'")
                 else:
-                    print(f"  [attack] {dataset}/{log_file.name}  →  no parseable data (skipped)")
+                    print(f"  [{attack_subdir_name}] {dataset}/{log_file.name}  →  no parseable data (skipped)")
             else:
-                print(f"  [attack] {dataset}/{log_file.name}  →  unknown format (skipped)")
+                print(f"  [{attack_subdir_name}] {dataset}/{log_file.name}  →  unknown format (skipped)")
+
+for dataset_dir in sorted(LOG_DIR.iterdir()):
+    if not dataset_dir.is_dir():
+        continue
+    dataset = dataset_dir.name
+
+    # ── regular attack logs ────────────────────────────────────────────────────────
+    process_attack_logs(dataset_dir, dataset, "attack", attack_data)
+
+    # ── cosine attack logs ─────────────────────────────────────────────────────────
+    process_attack_logs(dataset_dir, dataset, "cosine_attack", cosine_attack_data)
+
 
     # ── clean logs ─────────────────────────────────────────────────────────
     clean_dir = dataset_dir / "clean"
@@ -488,8 +511,8 @@ for dataset_dir in sorted(LOG_DIR.iterdir()):
             else:
                 print(f"  [clean]  {dataset}/{log_file.name}  →  unknown format (skipped)")
 
-if not attack_data and not clean_data:
-    print("\nNo log data found.  Run  python run_all.py  first.")
+if not attack_data and not cosine_attack_data and not clean_data:
+    print("\nNo log data found.  Run  python run_all.py  or python cosine_attack.py  first.")
     sys.exit(0)
 
 print()  # blank line before figures section
@@ -555,316 +578,346 @@ if compare_models:
     print(f"Using compare list from '{COMPARE_MODELS_PATH}': {compare_models}")
 
 # ---------------------------------------------------------------------------
-# Figure 1: per-dataset robustness curves
+# Unified Figure Generator (for any attack type)
 # ---------------------------------------------------------------------------
-# Sort datasets for deterministic output
-all_datasets = sorted(set(list(attack_data.keys()) + list(clean_data.keys())))
-
-for dataset in all_datasets:
-    a_data = attack_data.get(dataset, {})
-    c_data = clean_data.get(dataset, {})
-
-    if not a_data:
-        print(f"  [skip] No attack data for dataset '{dataset}' — robustness figure skipped.")
-        continue
-
-    # Collect all model labels present in attack data
-    # Use attack label → match to clean label heuristically
-    all_labels = sorted(a_data.keys())
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.set_title(f"Robustness under PGD attack — {dataset}", fontsize=13, pad=10)
-    ax.set_xlabel("Attack budget (fraction of edges)", fontsize=11)
-    ax.set_ylabel("Accuracy", fontsize=11)
-    ax.grid(True, linestyle="--", alpha=0.4)
-
-    for idx, label in enumerate(all_labels):
-        budgets_dict = a_data[label]
-        budgets_sorted = sorted(budgets_dict.keys())
-
-        # --- x-axis points ---
-        # Budget 0.0 = clean accuracy (take from attack log's "Clean:" summary,
-        # which is constant across budgets; fall back to clean log if available)
-        first_budget_data = budgets_dict[budgets_sorted[0]]
-        clean_mean = first_budget_data["clean_mean"]
-        clean_std  = first_budget_data["clean_std"]
-
-        # Prefer clean log if a matching label is found
-        if label in c_data:
-            cm, cs = c_data[label]
-            clean_mean, clean_std = cm, cs
-
-        xs     = [0.0]       + budgets_sorted
-        means  = [clean_mean]  + [budgets_dict[b]["atk_mean"] for b in budgets_sorted]
-        stds   = [clean_std]   + [budgets_dict[b]["atk_std"]  for b in budgets_sorted]
-
-        color = _color(idx)
-        ax.plot(xs, means, marker="o", linewidth=2, label=label, color=color)
-        ax.fill_between(
-            xs,
-            [m - s for m, s in zip(means, stds)],
-            [m + s for m, s in zip(means, stds)],
-            alpha=0.15,
-            color=color,
-        )
-
-    ax.set_xlim(left=-0.01)
-    ax.set_ylim(bottom=0.0, top=1.05)
-    ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
-    ax.legend(loc="lower right", fontsize=7, framealpha=0.9)
-    fig.tight_layout()
-
-    out_path = OUT_DIR / f"robustness_{dataset}.png"
-    fig.savefig(out_path, dpi=args.dpi)
-    plt.close(fig)
-    print(f"  Saved: {out_path}")
-
-    # --- Optional compare-list figure (per-dataset) ---
-    if compare_models:
-        filtered_labels = _filter_labels(all_labels, compare_models)
-        if filtered_labels:
-            fig, ax = plt.subplots(figsize=(8, 5))
-            ax.set_title(f"Robustness (compare list) — {dataset}", fontsize=13, pad=10)
-            ax.set_xlabel("Attack budget (fraction of edges)", fontsize=11)
-            ax.set_ylabel("Accuracy", fontsize=11)
-            ax.grid(True, linestyle="--", alpha=0.4)
-
-            for idx, label in enumerate(filtered_labels):
-                budgets_dict = a_data[label]
-                budgets_sorted = sorted(budgets_dict.keys())
-
-                first_budget_data = budgets_dict[budgets_sorted[0]]
-                clean_mean = first_budget_data["clean_mean"]
-                clean_std  = first_budget_data["clean_std"]
-                if label in c_data:
-                    cm, cs = c_data[label]
-                    clean_mean, clean_std = cm, cs
-
-                xs     = [0.0]       + budgets_sorted
-                means  = [clean_mean]  + [budgets_dict[b]["atk_mean"] for b in budgets_sorted]
-                stds   = [clean_std]   + [budgets_dict[b]["atk_std"]  for b in budgets_sorted]
-
-                color = _color(idx)
-                ax.plot(xs, means, marker="o", linewidth=2, label=label, color=color)
-                ax.fill_between(
-                    xs,
-                    [m - s for m, s in zip(means, stds)],
-                    [m + s for m, s in zip(means, stds)],
-                    alpha=0.15,
-                    color=color,
-                )
-
-            ax.set_xlim(left=-0.01)
-            ax.set_ylim(bottom=0.0, top=1.05)
-            ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
-            ax.legend(loc="lower right", fontsize=6, framealpha=0.9)
-            fig.tight_layout()
-
-            out_path = OUT_DIR / f"robustness_{dataset}_compare.png"
-            fig.savefig(out_path, dpi=args.dpi)
-            plt.close(fig)
-            print(f"  Saved: {out_path}")
-        else:
-            print(f"  [compare] {dataset}: no models matched compare list (skipped)")
-
-    # --- Pairwise RUNG vs other model plots ---
-    rung_label = None
-    for label in all_labels:
-        if label.startswith("RUNG"):
-            rung_label = label
-            break
-    if rung_label:
-        for other_label in all_labels:
-            if other_label == rung_label:
-                continue
-            # Plot RUNG and other_label together
-            fig, ax = plt.subplots(figsize=(8, 5))
-            ax.set_title(f"Robustness: {dataset} — {rung_label} vs {other_label}", fontsize=13, pad=10)
-            ax.set_xlabel("Attack budget (fraction of edges)", fontsize=11)
-            ax.set_ylabel("Accuracy", fontsize=11)
-            ax.grid(True, linestyle="--", alpha=0.4)
-
-            for idx, label in enumerate([rung_label, other_label]):
-                budgets_dict = a_data[label]
-                budgets_sorted = sorted(budgets_dict.keys())
-                first_budget_data = budgets_dict[budgets_sorted[0]]
-                clean_mean = first_budget_data["clean_mean"]
-                clean_std  = first_budget_data["clean_std"]
-                if label in c_data:
-                    cm, cs = c_data[label]
-                    clean_mean, clean_std = cm, cs
-                xs     = [0.0]       + budgets_sorted
-                means  = [clean_mean]  + [budgets_dict[b]["atk_mean"] for b in budgets_sorted]
-                stds   = [clean_std]   + [budgets_dict[b]["atk_std"]  for b in budgets_sorted]
-                color = _color(idx)
-                ax.plot(xs, means, marker="o", linewidth=2, label=label, color=color)
-                ax.fill_between(
-                    xs,
-                    [m - s for m, s in zip(means, stds)],
-                    [m + s for m, s in zip(means, stds)],
-                    alpha=0.15,
-                    color=color,
-                )
-            ax.set_xlim(left=-0.01)
-            ax.set_ylim(bottom=0.0, top=1.05)
-            ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
-            ax.legend(loc="lower right", fontsize=7, framealpha=0.9)
-            fig.tight_layout()
-            safe_other = other_label.replace(" ", "_").replace("/", "_").replace("(", "").replace(")", "").replace(",", "").replace("=", "").replace("γ", "gamma")
-            safe_rung = rung_label.replace(" ", "_").replace("/", "_").replace("(", "").replace(")", "").replace(",", "").replace("=", "").replace("γ", "gamma")
-            out_path = OUT_DIR / f"robustness_{dataset}_{safe_rung}_vs_{safe_other}.png"
-            fig.savefig(out_path, dpi=args.dpi)
-            plt.close(fig)
-            print(f"  Saved: {out_path}")
-
-
-# ---------------------------------------------------------------------------
-# Figure 2: clean accuracy bar chart (all datasets × all models)
-# ---------------------------------------------------------------------------
-# Build a unified set of models across all datasets; collect values
-all_model_labels = sorted(
-    {lbl for ds_data in clean_data.values() for lbl in ds_data}
-    | {lbl for ds_data in attack_data.values() for lbl in ds_data}
-)
-
-# For each (model, dataset) give the clean accuracy
-#   priority: clean log > attack log's first-budget "clean_mean"
-clean_means: dict[str, dict[str, tuple[float, float]]] = {}  # label → dataset → (mean, std)
-for label in all_model_labels:
-    clean_means[label] = {}
+def generate_all_figures(input_attack_data, output_dir, attack_type_name):
+    """
+    Generate all figures (robustness curves, clean accuracy bar, combined grid) for a given attack type.
+    
+    Parameters:
+    -----------
+    input_attack_data : dict[str, dict[str, dict]]
+        Attack data structure: dataset -> label -> budget_dict
+    output_dir : Path
+        Directory where PNG figures are saved
+    attack_type_name : str
+        Name of attack type for logging (e.g., "attack" or "cosine_attack")
+    """
+    
+    # Skip if no attack data
+    if not input_attack_data:
+        print(f"  [skip] No {attack_type_name} data found — figures skipped.")
+        return
+    
+    print(f"\nGenerating {attack_type_name} figures...")
+    
+    # Get all datasets present in this attack data
+    all_datasets = sorted(input_attack_data.keys())
+    
+    # ---------------------------------------------------------------------------
+    # Figure 1: per-dataset robustness curves
+    # ---------------------------------------------------------------------------
     for dataset in all_datasets:
-        if label in clean_data.get(dataset, {}):
-            clean_means[label][dataset] = clean_data[dataset][label]
-        elif label in attack_data.get(dataset, {}):
-            bd = attack_data[dataset][label]
-            if bd:
-                first = bd[sorted(bd.keys())[0]]
-                clean_means[label][dataset] = (first["clean_mean"], first["clean_std"])
+        a_data = input_attack_data.get(dataset, {})
+        c_data = clean_data.get(dataset, {})
 
-# Only draw the bar chart if there is at least one value
-has_any = any(clean_means[lbl] for lbl in all_model_labels)
-if has_any:
-    n_models   = len(all_model_labels)
-    n_datasets = len(all_datasets)
-    x = np.arange(n_datasets)
-    bar_width = min(0.8 / max(n_models, 1), 0.25)
-    offsets = (np.arange(n_models) - (n_models - 1) / 2) * bar_width
+        if not a_data:
+            print(f"  [skip] No {attack_type_name} data for dataset '{dataset}' — robustness figure skipped.")
+            continue
 
-    fig, ax = plt.subplots(figsize=(max(6, n_datasets * 2.5), 5))
-    ax.set_title("Clean accuracy by model and dataset", fontsize=13, pad=10)
-    ax.set_ylabel("Clean accuracy", fontsize=11)
-    ax.set_xticks(x)
-    ax.set_xticklabels(all_datasets, fontsize=11)
-    ax.set_ylim(0, 1.1)
-    ax.grid(axis="y", linestyle="--", alpha=0.4)
-    ax.axhline(0, color="black", linewidth=0.8)
+        # Collect all model labels present in attack data
+        all_labels = sorted(a_data.keys())
 
-    for i, label in enumerate(all_model_labels):
-        ds_vals = clean_means[label]
-        bar_means = []
-        bar_stds  = []
-        for ds in all_datasets:
-            if ds in ds_vals:
-                bar_means.append(ds_vals[ds][0])
-                bar_stds.append(ds_vals[ds][1])
-            else:
-                bar_means.append(0.0)
-                bar_stds.append(0.0)
-
-        bars = ax.bar(
-            x + offsets[i],
-            bar_means,
-            width=bar_width * 0.9,
-            yerr=bar_stds,
-            capsize=4,
-            color=_color(i),
-            label=label,
-            alpha=0.85,
-        )
-        # Annotate each bar with the mean value
-        for bar, mean_val in zip(bars, bar_means):
-            if mean_val > 0:
-                ax.text(
-                    bar.get_x() + bar.get_width() / 2,
-                    bar.get_height() + 0.01,
-                    f"{mean_val:.3f}",
-                    ha="center", va="bottom", fontsize=7, rotation=90,
-                )
-
-    ax.legend(loc="lower right", fontsize=7, framealpha=0.9)
-    fig.tight_layout()
-
-    out_path = OUT_DIR / "clean_accuracy.png"
-    fig.savefig(out_path, dpi=args.dpi)
-    plt.close(fig)
-    print(f"  Saved: {out_path}")
-else:
-    print("  [skip] No clean accuracy data found — bar chart skipped.")
-
-# ---------------------------------------------------------------------------
-# Figure 3: combined robustness — all datasets in one grid figure
-# ---------------------------------------------------------------------------
-datasets_with_attack = [ds for ds in all_datasets if attack_data.get(ds)]
-if len(datasets_with_attack) > 1:
-    ncols = min(len(datasets_with_attack), 3)
-    nrows = (len(datasets_with_attack) + ncols - 1) // ncols
-    fig, axes = plt.subplots(nrows, ncols,
-                             figsize=(ncols * 6, nrows * 4.5),
-                             squeeze=False)
-    fig.suptitle("Robustness curves — all datasets", fontsize=14, y=1.01)
-
-    all_labels_union = sorted(
-        {lbl for ds in datasets_with_attack for lbl in attack_data[ds]}
-    )
-
-    for ax_idx, dataset in enumerate(datasets_with_attack):
-        row, col = divmod(ax_idx, ncols)
-        ax = axes[row][col]
-        a_data = attack_data[dataset]
-        c_data_ds = clean_data.get(dataset, {})
-
-        ax.set_title(dataset, fontsize=11)
-        ax.set_xlabel("Attack budget", fontsize=9)
-        ax.set_ylabel("Accuracy", fontsize=9)
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.set_title(f"Robustness under PGD attack — {dataset} ({attack_type_name})", fontsize=13, pad=10)
+        ax.set_xlabel("Attack budget (fraction of edges)", fontsize=11)
+        ax.set_ylabel("Accuracy", fontsize=11)
         ax.grid(True, linestyle="--", alpha=0.4)
 
-        for idx, label in enumerate(all_labels_union):
-            if label not in a_data:
-                continue
+        for idx, label in enumerate(all_labels):
             budgets_dict = a_data[label]
             budgets_sorted = sorted(budgets_dict.keys())
-            first = budgets_dict[budgets_sorted[0]]
-            clean_mean = c_data_ds[label][0] if label in c_data_ds else first["clean_mean"]
-            clean_std  = c_data_ds[label][1] if label in c_data_ds else first["clean_std"]
-            xs    = [0.0] + budgets_sorted
-            means = [clean_mean] + [budgets_dict[b]["atk_mean"] for b in budgets_sorted]
-            stds  = [clean_std]  + [budgets_dict[b]["atk_std"]  for b in budgets_sorted]
+
+            # --- x-axis points ---
+            first_budget_data = budgets_dict[budgets_sorted[0]]
+            clean_mean = first_budget_data["clean_mean"]
+            clean_std  = first_budget_data["clean_std"]
+
+            # Prefer clean log if a matching label is found
+            if label in c_data:
+                cm, cs = c_data[label]
+                clean_mean, clean_std = cm, cs
+
+            xs     = [0.0]       + budgets_sorted
+            means  = [clean_mean]  + [budgets_dict[b]["atk_mean"] for b in budgets_sorted]
+            stds   = [clean_std]   + [budgets_dict[b]["atk_std"]  for b in budgets_sorted]
+
             color = _color(idx)
-            ax.plot(xs, means, marker="o", linewidth=1.8, label=label, color=color)
-            ax.fill_between(xs,
-                            [m - s for m, s in zip(means, stds)],
-                            [m + s for m, s in zip(means, stds)],
-                            alpha=0.12, color=color)
+            ax.plot(xs, means, marker="o", linewidth=2, label=label, color=color)
+            ax.fill_between(
+                xs,
+                [m - s for m, s in zip(means, stds)],
+                [m + s for m, s in zip(means, stds)],
+                alpha=0.15,
+                color=color,
+            )
 
         ax.set_xlim(left=-0.01)
-        ax.set_ylim(0.0, 1.05)
+        ax.set_ylim(bottom=0.0, top=1.05)
         ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
-        ax.legend(loc="lower right", fontsize=6, framealpha=0.9)
+        ax.legend(loc="lower right", fontsize=7, framealpha=0.9)
+        fig.tight_layout()
 
-    # hide unused axes
-    for ax_idx in range(len(datasets_with_attack), nrows * ncols):
-        row, col = divmod(ax_idx, ncols)
-        axes[row][col].set_visible(False)
+        out_path = output_dir / f"robustness_{dataset}.png"
+        fig.savefig(out_path, dpi=args.dpi)
+        plt.close(fig)
+        print(f"  Saved: {out_path}")
 
-    fig.tight_layout()
-    out_path = OUT_DIR / "robustness_all_datasets.png"
-    fig.savefig(out_path, dpi=args.dpi, bbox_inches="tight")
-    plt.close(fig)
-    print(f"  Saved: {out_path}")
+        # --- Optional compare-list figure (per-dataset) ---
+        if compare_models:
+            filtered_labels = _filter_labels(all_labels, compare_models)
+            if filtered_labels:
+                fig, ax = plt.subplots(figsize=(8, 5))
+                ax.set_title(f"Robustness (compare list) — {dataset} ({attack_type_name})", fontsize=13, pad=10)
+                ax.set_xlabel("Attack budget (fraction of edges)", fontsize=11)
+                ax.set_ylabel("Accuracy", fontsize=11)
+                ax.grid(True, linestyle="--", alpha=0.4)
+
+                for idx, label in enumerate(filtered_labels):
+                    budgets_dict = a_data[label]
+                    budgets_sorted = sorted(budgets_dict.keys())
+
+                    first_budget_data = budgets_dict[budgets_sorted[0]]
+                    clean_mean = first_budget_data["clean_mean"]
+                    clean_std  = first_budget_data["clean_std"]
+                    if label in c_data:
+                        cm, cs = c_data[label]
+                        clean_mean, clean_std = cm, cs
+
+                    xs     = [0.0]       + budgets_sorted
+                    means  = [clean_mean]  + [budgets_dict[b]["atk_mean"] for b in budgets_sorted]
+                    stds   = [clean_std]   + [budgets_dict[b]["atk_std"]  for b in budgets_sorted]
+
+                    color = _color(idx)
+                    ax.plot(xs, means, marker="o", linewidth=2, label=label, color=color)
+                    ax.fill_between(
+                        xs,
+                        [m - s for m, s in zip(means, stds)],
+                        [m + s for m, s in zip(means, stds)],
+                        alpha=0.15,
+                        color=color,
+                    )
+
+                ax.set_xlim(left=-0.01)
+                ax.set_ylim(bottom=0.0, top=1.05)
+                ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
+                ax.legend(loc="lower right", fontsize=6, framealpha=0.9)
+                fig.tight_layout()
+
+                out_path = output_dir / f"robustness_{dataset}_compare.png"
+                fig.savefig(out_path, dpi=args.dpi)
+                plt.close(fig)
+                print(f"  Saved: {out_path}")
+            else:
+                print(f"  [compare] {dataset}: no models matched compare list (skipped)")
+
+        # --- Pairwise RUNG vs other model plots ---
+        rung_label = None
+        for label in all_labels:
+            if label.startswith("RUNG"):
+                rung_label = label
+                break
+        if rung_label:
+            for other_label in all_labels:
+                if other_label == rung_label:
+                    continue
+                # Plot RUNG and other_label together
+                fig, ax = plt.subplots(figsize=(8, 5))
+                ax.set_title(f"Robustness: {dataset} — {rung_label} vs {other_label}", fontsize=13, pad=10)
+                ax.set_xlabel("Attack budget (fraction of edges)", fontsize=11)
+                ax.set_ylabel("Accuracy", fontsize=11)
+                ax.grid(True, linestyle="--", alpha=0.4)
+
+                for idx, label in enumerate([rung_label, other_label]):
+                    budgets_dict = a_data[label]
+                    budgets_sorted = sorted(budgets_dict.keys())
+                    first_budget_data = budgets_dict[budgets_sorted[0]]
+                    clean_mean = first_budget_data["clean_mean"]
+                    clean_std  = first_budget_data["clean_std"]
+                    if label in c_data:
+                        cm, cs = c_data[label]
+                        clean_mean, clean_std = cm, cs
+                    xs     = [0.0]       + budgets_sorted
+                    means  = [clean_mean]  + [budgets_dict[b]["atk_mean"] for b in budgets_sorted]
+                    stds   = [clean_std]   + [budgets_dict[b]["atk_std"]  for b in budgets_sorted]
+                    color = _color(idx)
+                    ax.plot(xs, means, marker="o", linewidth=2, label=label, color=color)
+                    ax.fill_between(
+                        xs,
+                        [m - s for m, s in zip(means, stds)],
+                        [m + s for m, s in zip(means, stds)],
+                        alpha=0.15,
+                        color=color,
+                    )
+                ax.set_xlim(left=-0.01)
+                ax.set_ylim(bottom=0.0, top=1.05)
+                ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
+                ax.legend(loc="lower right", fontsize=7, framealpha=0.9)
+                fig.tight_layout()
+                safe_other = other_label.replace(" ", "_").replace("/", "_").replace("(", "").replace(")", "").replace(",", "").replace("=", "").replace("γ", "gamma")
+                safe_rung = rung_label.replace(" ", "_").replace("/", "_").replace("(", "").replace(")", "").replace(",", "").replace("=", "").replace("γ", "gamma")
+                out_path = output_dir / f"robustness_{dataset}_{safe_rung}_vs_{safe_other}.png"
+                fig.savefig(out_path, dpi=args.dpi)
+                plt.close(fig)
+                print(f"  Saved: {out_path}")
+
+
+    # ---------------------------------------------------------------------------
+    # Figure 2: clean accuracy bar chart (all datasets × all models)
+    # ---------------------------------------------------------------------------
+    # Build a unified set of models across all datasets; collect values
+    all_model_labels = sorted(
+        {lbl for ds_data in clean_data.values() for lbl in ds_data}
+        | {lbl for ds_data in input_attack_data.values() for lbl in ds_data}
+    )
+
+    # For each (model, dataset) give the clean accuracy
+    #   priority: clean log > attack log's first-budget "clean_mean"
+    clean_means: dict[str, dict[str, tuple[float, float]]] = {}  # label → dataset → (mean, std)
+    for label in all_model_labels:
+        clean_means[label] = {}
+        for dataset in all_datasets:
+            if label in clean_data.get(dataset, {}):
+                clean_means[label][dataset] = clean_data[dataset][label]
+            elif label in input_attack_data.get(dataset, {}):
+                bd = input_attack_data[dataset][label]
+                if bd:
+                    first = bd[sorted(bd.keys())[0]]
+                    clean_means[label][dataset] = (first["clean_mean"], first["clean_std"])
+
+    # Only draw the bar chart if there is at least one value
+    has_any = any(clean_means[lbl] for lbl in all_model_labels)
+    if has_any:
+        n_models   = len(all_model_labels)
+        n_datasets = len(all_datasets)
+        x = np.arange(n_datasets)
+        bar_width = min(0.8 / max(n_models, 1), 0.25)
+        offsets = (np.arange(n_models) - (n_models - 1) / 2) * bar_width
+
+        fig, ax = plt.subplots(figsize=(max(6, n_datasets * 2.5), 5))
+        ax.set_title(f"Clean accuracy by model and dataset ({attack_type_name})", fontsize=13, pad=10)
+        ax.set_ylabel("Clean accuracy", fontsize=11)
+        ax.set_xticks(x)
+        ax.set_xticklabels(all_datasets, fontsize=11)
+        ax.set_ylim(0, 1.1)
+        ax.grid(axis="y", linestyle="--", alpha=0.4)
+        ax.axhline(0, color="black", linewidth=0.8)
+
+        for i, label in enumerate(all_model_labels):
+            ds_vals = clean_means[label]
+            bar_means = []
+            bar_stds  = []
+            for ds in all_datasets:
+                if ds in ds_vals:
+                    bar_means.append(ds_vals[ds][0])
+                    bar_stds.append(ds_vals[ds][1])
+                else:
+                    bar_means.append(0.0)
+                    bar_stds.append(0.0)
+
+            bars = ax.bar(
+                x + offsets[i],
+                bar_means,
+                width=bar_width * 0.9,
+                yerr=bar_stds,
+                capsize=4,
+                color=_color(i),
+                label=label,
+                alpha=0.85,
+            )
+            # Annotate each bar with the mean value
+            for bar, mean_val in zip(bars, bar_means):
+                if mean_val > 0:
+                    ax.text(
+                        bar.get_x() + bar.get_width() / 2,
+                        bar.get_height() + 0.01,
+                        f"{mean_val:.3f}",
+                        ha="center", va="bottom", fontsize=7, rotation=90,
+                    )
+
+        ax.legend(loc="lower right", fontsize=7, framealpha=0.9)
+        fig.tight_layout()
+
+        out_path = output_dir / "clean_accuracy.png"
+        fig.savefig(out_path, dpi=args.dpi)
+        plt.close(fig)
+        print(f"  Saved: {out_path}")
+    else:
+        print("  [skip] No clean accuracy data found — bar chart skipped.")
+
+    # ---------------------------------------------------------------------------
+    # Figure 3: combined robustness — all datasets in one grid figure
+    # ---------------------------------------------------------------------------
+    datasets_with_attack = [ds for ds in all_datasets if input_attack_data.get(ds)]
+    if len(datasets_with_attack) > 1:
+        ncols = min(len(datasets_with_attack), 3)
+        nrows = (len(datasets_with_attack) + ncols - 1) // ncols
+        fig, axes = plt.subplots(nrows, ncols,
+                                 figsize=(ncols * 6, nrows * 4.5),
+                                 squeeze=False)
+        fig.suptitle(f"Robustness curves — all datasets ({attack_type_name})", fontsize=14, y=1.01)
+
+        all_labels_union = sorted(
+            {lbl for ds in datasets_with_attack for lbl in input_attack_data[ds]}
+        )
+
+        for ax_idx, dataset in enumerate(datasets_with_attack):
+            row, col = divmod(ax_idx, ncols)
+            ax = axes[row][col]
+            a_data = input_attack_data[dataset]
+            c_data_ds = clean_data.get(dataset, {})
+
+            ax.set_title(dataset, fontsize=11)
+            ax.set_xlabel("Attack budget", fontsize=9)
+            ax.set_ylabel("Accuracy", fontsize=9)
+            ax.grid(True, linestyle="--", alpha=0.4)
+
+            for idx, label in enumerate(all_labels_union):
+                if label not in a_data:
+                    continue
+                budgets_dict = a_data[label]
+                budgets_sorted = sorted(budgets_dict.keys())
+                first = budgets_dict[budgets_sorted[0]]
+                clean_mean = c_data_ds[label][0] if label in c_data_ds else first["clean_mean"]
+                clean_std  = c_data_ds[label][1] if label in c_data_ds else first["clean_std"]
+                xs    = [0.0] + budgets_sorted
+                means = [clean_mean] + [budgets_dict[b]["atk_mean"] for b in budgets_sorted]
+                stds  = [clean_std]  + [budgets_dict[b]["atk_std"]  for b in budgets_sorted]
+                color = _color(idx)
+                ax.plot(xs, means, marker="o", linewidth=1.8, label=label, color=color)
+                ax.fill_between(xs,
+                                [m - s for m, s in zip(means, stds)],
+                                [m + s for m, s in zip(means, stds)],
+                                alpha=0.12, color=color)
+
+            ax.set_xlim(left=-0.01)
+            ax.set_ylim(0.0, 1.05)
+            ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
+            ax.legend(loc="lower right", fontsize=6, framealpha=0.9)
+
+        # hide unused axes
+        for ax_idx in range(len(datasets_with_attack), nrows * ncols):
+            row, col = divmod(ax_idx, ncols)
+            axes[row][col].set_visible(False)
+
+        fig.tight_layout()
+        out_path = output_dir / "robustness_all_datasets.png"
+        fig.savefig(out_path, dpi=args.dpi, bbox_inches="tight")
+        plt.close(fig)
+        print(f"  Saved: {out_path}")
+
+
+# ---------------------------------------------------------------------------
+# Generate figures for both attack types
+# ---------------------------------------------------------------------------
+generate_all_figures(attack_data, OUT_DIR_ATTACK, "attack")
+generate_all_figures(cosine_attack_data, OUT_DIR_COSINE, "cosine_attack")
 
 # ---------------------------------------------------------------------------
 # Done
 # ---------------------------------------------------------------------------
-print(f"\nAll figures written to '{OUT_DIR}/'.")
+print(f"\nAll figures written to:")
+print(f"  - Standard attacks: '{OUT_DIR_ATTACK}/'")
+print(f"  - Cosine attacks: '{OUT_DIR_COSINE}/'")
 print("To re-run after new training/attack logs appear, just run:")
 print("    python plot_logs.py")
