@@ -78,6 +78,8 @@ parser.add_argument('--alpha_blend_init', type=float, default=0.5,
 
 parser.add_argument('--budgets', type=float, nargs='+', default=[0.05, 0.1, 0.2, 0.3, 0.4, 0.6],
                     help='Attack budgets to evaluate (default: 0.05 0.1 0.2 0.3 0.4 0.6).')
+parser.add_argument('--attack_steps', type=int, default=200,
+                    help='Number of PGD attack iterations (default: 200).')
 
 args = parser.parse_args()
 # Compound model names encode both model and norm (e.g. RUNG_new_SCAD).
@@ -327,6 +329,9 @@ if __name__ == '__main__':
             model_params['percentile_q']      = args.percentile_q
             model_params['decay_rate_init']   = args.decay_rate_init
             model_params['alpha_blend_init']  = args.alpha_blend_init
-        run_global_evasion_adaptive_exp([[args.model, model_params, {'max_epoch': 300}]])
+        run_global_evasion_adaptive_exp(
+            [[args.model, model_params, {'max_epoch': 300}]],
+            iter=args.attack_steps,
+        )
     
     sys.stdout.close()

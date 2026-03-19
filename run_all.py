@@ -118,6 +118,13 @@ parser.add_argument(
     "--max_epoch", type=int, default=300,
     help="Max training epochs (default: 300).",
 )
+parser.add_argument(
+    "--attack_steps", type=int, default=100,
+    help=(
+        "Override the number of PGD attack steps for all models (default: 100). "
+        "For RUNG_combined this sets --attack_epochs; for other models this sets --attack_steps."
+    ),
+)
 
 # ===== EXTENDED ATTACK BUDGETS =====
 parser.add_argument(
@@ -303,6 +310,10 @@ def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
             f"--use_layerwise_q={args.use_layerwise_q}",
             f"--percentile_q_late={args.percentile_q_late}",
             f"--max_epoch={args.max_epoch}",
+        ]
+        if args.attack_steps is not None:
+            cmd.append(f"--attack_epochs={args.attack_steps}")
+        cmd += [
             "--budgets",
         ] + [str(b) for b in args.budgets]
         
@@ -390,6 +401,8 @@ def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
     elif script == "attack.py":
         # Pass the extended budget array to attack.py
         cmd.extend(["--budgets"] + [str(b) for b in args.budgets])
+        if args.attack_steps is not None:
+            cmd.append(f"--attack_steps={args.attack_steps}")
     
     t0 = time.perf_counter()
     proc = subprocess.run(cmd, cwd=str(PROJECT_ROOT))
