@@ -144,16 +144,41 @@ def global_evasion_pgd_cosine(
         total_loss = margin(out[test_idx, :], y[test_idx]).tanh().mean()
 
         if args.beta > 0.0:
+            # CORRECTED STEALTH LOSS:
+            # Only penalize added edges that EXCEED the defense threshold (gamma).
+            # This avoids the gradient cancellation problem where adversarial edges
+            # (high cosine distance) conflict with stealth edges (low cosine distance).
+            
             # Count each undirected inserted edge once.
             added_mask = (flip > 0.5) & (A < 0.5)
             added_mask = torch.triu(added_mask, diagonal=1)
+            
             if added_mask.any():
                 src, dst = added_mask.nonzero(as_tuple=True)
                 feat_unit = F.normalize(out, p=2, dim=-1, eps=1e-8)
                 cos_sim = (feat_unit[src] * feat_unit[dst]).sum(dim=-1)
-                cos_dist = (1.0 - cos_sim).clamp(min=0.0, max=2.0)
-                # Minimize cosine distance so inserted edges look benign.
-                total_loss = total_loss + args.beta * cos_dist.mean()
+                cos_dist_added = (1.0 - cos_sim).clamp(min=0.0, max=2.0)
+                
+                # Compute defense threshold (75th percentile of ALL edge cosine distances).
+                # The defense uses percentile-based gamma, so we approximate it here.
+                all_edge_mask = torch.triu(A > 0.5, diagonal=1)
+                if all_edge_mask.any():
+                    src_all, dst_all = all_edge_mask.nonzero(as_tuple=True)
+                    cos_sim_all = (feat_unit[src_all] * feat_unit[dst_all]).sum(dim=-1)
+                    cos_dist_all = (1.0 - cos_sim_all).clamp(min=0.0, max=2.0)
+                    # Estimate gamma as 75th percentile (default percentile in RUNG)
+                    gamma_approx = torch.quantile(cos_dist_all, 0.75)
+                else:
+                    gamma_approx = torch.tensor(1.0, device=A.device, dtype=A.dtype)
+                
+                # CORRECTED STEALTH: penalize edges that EXCEED the threshold.
+                # relu(cos_dist - gamma) is positive when edge is ABOVE gamma (caught by defense),
+                # zero when edge is below gamma (passes through defense).
+                # Attacker is penalized only for visible edges, not for all edges.
+                visibility_penalty = torch.relu(cos_dist_added - gamma_approx)
+                L_stealth = args.beta * visibility_penalty.mean()
+                
+                total_loss = total_loss + L_stealth
 
         return total_loss
 
