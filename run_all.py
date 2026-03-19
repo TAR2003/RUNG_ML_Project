@@ -125,6 +125,17 @@ parser.add_argument(
         "For RUNG_combined this sets --attack_epochs; for other models this sets --attack_steps."
     ),
 )
+parser.add_argument(
+    "--cosine_attack_epochs", type=int, default=100,
+    help=(
+        "PGD iterations for cosine adaptive attack (Step 3, default: 100). "
+        "For RUNG_combined this is routed to train_test_combined.py; for other models it is passed to cosine_attack.py."
+    ),
+)
+parser.add_argument(
+    "--beta", type=float, default=1.0,
+    help="Stealth weight for cosine adaptive attack (default: 1.0).",
+)
 
 # ===== EXTENDED ATTACK BUDGETS =====
 parser.add_argument(
@@ -273,6 +284,10 @@ parser.add_argument(
     "--skip_attack", action="store_true",
     help="Skip the PGD-attack evaluation step.",
 )
+parser.add_argument(
+    "--skip_cosine_attack", action="store_true",
+    help="Skip the cosine adaptive PGD-attack evaluation step.",
+)
 
 args = parser.parse_args()
 
@@ -313,6 +328,12 @@ def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
         ]
         if args.attack_steps is not None:
             cmd.append(f"--attack_epochs={args.attack_steps}")
+        if not args.skip_cosine_attack:
+            cmd += [
+                "--run_cosine_attack",
+                f"--cosine_attack_epochs={args.cosine_attack_epochs}",
+                f"--beta={args.beta}",
+            ]
         cmd += [
             "--budgets",
         ] + [str(b) for b in args.budgets]
@@ -324,6 +345,9 @@ def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
     
     elif model == "RUNG_combined" and script == "attack.py":
         # Skip attack step for RUNG_combined (already done in train_test_combined.py)
+        return True, 0.0
+    elif model == "RUNG_combined" and script == "cosine_attack.py":
+        # Skip separate cosine step for RUNG_combined (already done in train_test_combined.py)
         return True, 0.0
     
     # Standard handling for other models: clean.py and attack.py
@@ -403,6 +427,11 @@ def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
         cmd.extend(["--budgets"] + [str(b) for b in args.budgets])
         if args.attack_steps is not None:
             cmd.append(f"--attack_steps={args.attack_steps}")
+    elif script == "cosine_attack.py":
+        # Pass the extended budget array and cosine-specific args.
+        cmd.extend(["--budgets"] + [str(b) for b in args.budgets])
+        cmd.append(f"--attack_steps={args.cosine_attack_epochs}")
+        cmd.append(f"--beta={args.beta}")
     
     t0 = time.perf_counter()
     proc = subprocess.run(cmd, cwd=str(PROJECT_ROOT))
@@ -418,9 +447,11 @@ if not args.skip_clean:
     phases.append(("clean.py",  "Train (clean)"))
 if not args.skip_attack:
     phases.append(("attack.py", "PGD attack"))
+if not args.skip_cosine_attack:
+    phases.append(("cosine_attack.py", "Cosine adaptive PGD attack"))
 
 if not phases:
-    print("Nothing to do — both --skip_clean and --skip_attack were set.")
+    print("Nothing to do — all selected phases were skipped.")
     sys.exit(0)
 
 results: list[dict] = []
@@ -530,7 +561,7 @@ print(f"\n")
 if n_fail:
     print(
         f"  WARNING: {n_fail} job(s) failed. "
-        "Check log/<dataset>/clean/ and log/<dataset>/attack/ for details.\n"
+        "Check log/<dataset>/clean/, log/<dataset>/attack/, and log/<dataset>/cosine_attack/ for details.\n"
         "  Run  python plot_logs.py  to visualise all available results."
     )
 else:

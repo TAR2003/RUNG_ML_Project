@@ -137,6 +137,92 @@ def attack_pgd(model, A, X, y, test_idx, budget=0.1, n_epochs=10, lr_attack=0.01
         return accuracy(model(A_attacked, X)[test_idx], y[test_idx]).item()
 
 
+def attack_pgd_cosine(
+    model,
+    A,
+    X,
+    y,
+    test_idx,
+    budget=0.1,
+    n_epochs=100,
+    lr_attack=0.01,
+    beta=1.0,
+    device="cpu",
+    budget_id=0,
+    total_budgets=6,
+):
+    """Adaptive PGD attack that also minimizes cosine distance on added edges."""
+    model = model.to(device)
+    A = A.to(device)
+    X = X.to(device)
+    y = y.to(device)
+    test_idx = test_idx.to(device)
+
+    model.eval()
+    print(f"    [Cosine Attack] Running on {device}")
+    print(f"    [Cosine Attack] A device: {A.device}, X device: {X.device}")
+
+    def loss_fn(flip):
+        A_pert = A + (flip * (1.0 - 2.0 * A))
+        out = model(A_pert, X)
+
+        # This margin implementation is minimized by the PGD routine.
+        # Lower margin -> stronger misclassification.
+        loss = margin(out[test_idx], y[test_idx]).mean()
+
+        if beta > 0.0:
+            # Only consider inserted edges and count each undirected edge once.
+            added_mask = (flip > 0.5) & (A < 0.5)
+            added_mask = torch.triu(added_mask, diagonal=1)
+
+            if added_mask.any():
+                src, dst = added_mask.nonzero(as_tuple=True)
+                feat_unit = F.normalize(out, p=2, dim=-1, eps=1e-8)
+                cos_sim = (feat_unit[src] * feat_unit[dst]).sum(dim=-1)
+                cos_dist = (1.0 - cos_sim).clamp(min=0.0, max=2.0)
+                # Minimize cosine distance for stealth.
+                loss = loss + beta * cos_dist.mean()
+
+        return loss
+
+    def grad_fn(flip):
+        loss = loss_fn(flip)
+        return torch.autograd.grad(loss, flip, create_graph=True)[0]
+
+    budget_edge_num = int(budget * A.count_nonzero().item() // 2)
+    try:
+        edge_pert, _ = proj_grad_descent(
+            flip_shape_or_init=A.shape,
+            symmetric=True,
+            device=A.device,
+            budget=budget_edge_num,
+            grad_fn=grad_fn,
+            loss_fn=loss_fn,
+            iterations=n_epochs,
+            base_lr=lr_attack,
+            grad_clip=1.0,
+            progress=True,
+            desc=(
+                f"    [Cosine Attack Budget {budget_id+1}/{total_budgets}, "
+                f"b={budget:.2f}, beta={beta}]"
+            ),
+        )
+    except Exception as e:
+        print(f"    [WARNING] Cosine attack failed: {e}. Returning clean accuracy.")
+        with torch.no_grad():
+            return accuracy(model(A, X)[test_idx], y[test_idx]).item()
+
+    A_attacked = A + edge_diff_matrix(edge_pert.long(), A) if edge_pert.numel() > 0 else A
+    model.eval()
+    with torch.no_grad():
+        attacked_acc = accuracy(model(A_attacked, X)[test_idx], y[test_idx]).item()
+
+    if str(device).startswith("cuda"):
+        torch.cuda.empty_cache()
+
+    return attacked_acc
+
+
 def _fmt_stats(values):
     return f"{np.mean(values)}±{np.std(values)}: {values}"
 
@@ -144,6 +230,7 @@ def _fmt_stats(values):
 def _run_one_dataset(args, dataset):
     os.makedirs(f"log/{dataset}/clean", exist_ok=True)
     os.makedirs(f"log/{dataset}/attack", exist_ok=True)
+    os.makedirs(f"log/{dataset}/cosine_attack", exist_ok=True)
 
     # Generate model-specific log identifier for RUNG_combined
     # Ensure args has model attribute for the identifier function
@@ -153,9 +240,11 @@ def _run_one_dataset(args, dataset):
     log_identifier = get_log_identifier(args.model, args)
     clean_log_path = f"log/{dataset}/clean/{log_identifier}.log"
     attack_log_path = f"log/{dataset}/attack/{log_identifier}.log"
+    cosine_attack_log_path = f"log/{dataset}/cosine_attack/{log_identifier}.log"
 
     clean_fh = open(clean_log_path, "w", buffering=1)
     attack_fh = open(attack_log_path, "w", buffering=1)
+    cosine_attack_fh = open(cosine_attack_log_path, "w", buffering=1)
 
     A, X, y = get_dataset(dataset)
     splits = get_splits(y)
@@ -205,44 +294,81 @@ def _run_one_dataset(args, dataset):
     clean_fh.write(f"model RUNG_combined done, clean acc: {_fmt_stats(split_clean)}\n")
     clean_fh.close()
 
-    if args.skip_attack:
+    if args.skip_attack and not args.run_cosine_attack:
         attack_fh.close()
+        cosine_attack_fh.close()
         print(f"  ✓ Training complete. Skipped attack phase.\n")
-        return clean_log_path, attack_log_path
+        return clean_log_path, attack_log_path, cosine_attack_log_path
 
-    print(f"\n  Attacking with {len(args.budgets)} budget(s)...")
-    
-    # Progress bar for budgets (attack phase)
-    for budget_id, budget in enumerate(tqdm(args.budgets, desc="  Attacking budgets", unit="budget", leave=True)):
-        attack_fh.write(f"Budget: {budget}\n")
-        attack_fh.write("Model:RUNG_combined\n")
-        split_attack = []
-        
-        # Progress bar for splits during attack
-        for split_idx, model in enumerate(tqdm(trained_models, desc=f"    Budget {budget_id+1}/{len(args.budgets)} (b={budget:.2f}): Attacks", 
-                                                unit="model", leave=False)):
-            attacked_acc = attack_pgd(
-                model,
-                A,
-                X,
-                y,
-                split_test_idx[split_idx],
-                budget=budget,
-                n_epochs=args.attack_epochs,
-                lr_attack=args.attack_lr,
-                device=device,
-                budget_id=budget_id,
-                total_budgets=len(args.budgets),
-            )
-            split_attack.append(attacked_acc)
-            attack_fh.write(f"{split_clean[split_idx]} {attacked_acc}\n")
-        
-        attack_fh.write(f"Clean: {_fmt_stats(split_clean)}\n")
-        attack_fh.write(f"Attacked: {_fmt_stats(split_attack)}\n")
+    if not args.skip_attack:
+        print(f"\n  Attacking with {len(args.budgets)} budget(s)...")
+
+        # Progress bar for budgets (attack phase)
+        for budget_id, budget in enumerate(tqdm(args.budgets, desc="  Attacking budgets", unit="budget", leave=True)):
+            attack_fh.write(f"Budget: {budget}\n")
+            attack_fh.write("Model:RUNG_combined\n")
+            split_attack = []
+
+            # Progress bar for splits during attack
+            for split_idx, model in enumerate(tqdm(trained_models, desc=f"    Budget {budget_id+1}/{len(args.budgets)} (b={budget:.2f}): Attacks",
+                                                    unit="model", leave=False)):
+                attacked_acc = attack_pgd(
+                    model,
+                    A,
+                    X,
+                    y,
+                    split_test_idx[split_idx],
+                    budget=budget,
+                    n_epochs=args.attack_epochs,
+                    lr_attack=args.attack_lr,
+                    device=device,
+                    budget_id=budget_id,
+                    total_budgets=len(args.budgets),
+                )
+                split_attack.append(attacked_acc)
+                attack_fh.write(f"{split_clean[split_idx]} {attacked_acc}\n")
+
+            attack_fh.write(f"Clean: {_fmt_stats(split_clean)}\n")
+            attack_fh.write(f"Attacked: {_fmt_stats(split_attack)}\n")
+
+        print(f"  ✓ Standard attack complete.")
+
+    if args.run_cosine_attack:
+        print(f"\n  Cosine attacking with {len(args.budgets)} budget(s)...")
+        for budget_id, budget in enumerate(tqdm(args.budgets, desc="  Cosine attack budgets", unit="budget", leave=True)):
+            cosine_attack_fh.write(f"Budget: {budget}\n")
+            cosine_attack_fh.write("Model:RUNG_combined\n")
+            split_attack = []
+
+            for split_idx, model in enumerate(tqdm(trained_models,
+                                                    desc=f"    Cosine Budget {budget_id+1}/{len(args.budgets)} (b={budget:.2f})",
+                                                    unit="model", leave=False)):
+                attacked_acc = attack_pgd_cosine(
+                    model,
+                    A,
+                    X,
+                    y,
+                    split_test_idx[split_idx],
+                    budget=budget,
+                    n_epochs=args.cosine_attack_epochs,
+                    lr_attack=args.attack_lr,
+                    beta=args.beta,
+                    device=device,
+                    budget_id=budget_id,
+                    total_budgets=len(args.budgets),
+                )
+                split_attack.append(attacked_acc)
+                cosine_attack_fh.write(f"{split_clean[split_idx]} {attacked_acc}\n")
+
+            cosine_attack_fh.write(f"Clean: {_fmt_stats(split_clean)}\n")
+            cosine_attack_fh.write(f"Attacked: {_fmt_stats(split_attack)}\n")
+
+        print(f"  ✓ Cosine attack complete.")
 
     attack_fh.close()
-    print(f"  ✓ Attack complete.\n")
-    return clean_log_path, attack_log_path
+    cosine_attack_fh.close()
+    print()
+    return clean_log_path, attack_log_path, cosine_attack_log_path
 
 
 def main():
@@ -261,6 +387,9 @@ def main():
         help="Attack budgets (fraction of edges). Centrally controlled from run_all.py."
     )
     parser.add_argument("--skip_attack", action="store_true")
+    parser.add_argument("--run_cosine_attack", action="store_true")
+    parser.add_argument("--cosine_attack_epochs", type=int, default=100)
+    parser.add_argument("--beta", type=float, default=1.0)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
 
@@ -270,16 +399,18 @@ def main():
     
     all_results = []
     for dataset in args.datasets:
-        clean_log, attack_log = _run_one_dataset(args, dataset)
-        all_results.append((dataset, clean_log, attack_log))
+        clean_log, attack_log, cosine_attack_log = _run_one_dataset(args, dataset)
+        all_results.append((dataset, clean_log, attack_log, cosine_attack_log))
 
     print("="*70)
     print("  Summary")
     print("="*70)
-    for dataset, clean_log, attack_log in all_results:
+    for dataset, clean_log, attack_log, cosine_attack_log in all_results:
         print(f"  {dataset:12} → clean: {clean_log}")
         if not args.skip_attack:
             print(f"  {' ':12} → attack: {attack_log}")
+        if args.run_cosine_attack:
+            print(f"  {' ':12} → cosine_attack: {cosine_attack_log}")
     print("="*70 + "\n")
 
 
