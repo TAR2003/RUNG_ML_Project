@@ -1,0 +1,134 @@
+
+Detected GPU: Tesla T4 with compute capability 7.5
+Using GPU: Tesla T4
+
+
+Fit RUNG_homophily_adaptive | lr=0.05, wd=0.0005, epochs=300
+  percentile_q=0.75, q_relax=0.2, q_max=0.99, homophily_mode=from_F0
+  Parameters: 109381
+  patience=100, grad_clip=1.0
+  Epoch   50 | loss=0.7847 | val_acc=0.6000 | h_mean=0.4499 | q_mean=0.8600
+  Epoch  100 | loss=0.7730 | val_acc=0.5200 | h_mean=0.4997 | q_mean=0.8501
+
+  Early stopping at epoch 149 (best val=0.6400 at epoch 48)
+
+Training done. Best val acc: 0.6400 (epoch 48)
+
+=======================================================
+            RUNG_homophily_adaptive - Stats            
+=======================================================
+  percentile_q:    0.75
+  q_relax:         0.2
+  q_max:           0.99
+  homophily_mode:  from_F0
+  Last h mean:     0.4546
+  Last q mean:     0.8591
+  Last gamma means per layer: [0.5616, 0.3838, 0.3745, 0.3710, 0.3728, 0.3721, 0.3735, 0.3728, 0.3744, 0.3743]
+=======================================================
+
+Acc: [0.6169154047966003]
+
+Fit RUNG_homophily_adaptive | lr=0.05, wd=0.0005, epochs=300
+  percentile_q=0.75, q_relax=0.2, q_max=0.99, homophily_mode=from_F0
+  Parameters: 109381
+  patience=100, grad_clip=1.0
+  Epoch   50 | loss=0.7259 | val_acc=0.5200 | h_mean=0.3969 | q_mean=0.8706
+  Epoch  100 | loss=0.9999 | val_acc=0.4000 | h_mean=0.3426 | q_mean=0.8815
+
+  Early stopping at epoch 123 (best val=0.6000 at epoch 22)
+
+Training done. Best val acc: 0.6000 (epoch 22)
+
+=======================================================
+            RUNG_homophily_adaptive - Stats            
+=======================================================
+  percentile_q:    0.75
+  q_relax:         0.2
+  q_max:           0.99
+  homophily_mode:  from_F0
+  Last h mean:     0.3032
+  Last q mean:     0.8894
+  Last gamma means per layer: [0.1501, 0.0798, 0.0677, 0.0657, 0.0656, 0.0664, 0.0662, 0.0662, 0.0660, 0.0658]
+=======================================================
+
+Acc: [0.6169154047966003, 0.6268656849861145]
+
+Fit RUNG_homophily_adaptive | lr=0.05, wd=0.0005, epochs=300
+  percentile_q=0.75, q_relax=0.2, q_max=0.99, homophily_mode=from_F0
+  Parameters: 109381
+  patience=100, grad_clip=1.0
+  Epoch   50 | loss=0.9719 | val_acc=0.4400 | h_mean=0.3808 | q_mean=0.8738
+  Epoch  100 | loss=1.0303 | val_acc=0.5200 | h_mean=0.3443 | q_mean=0.8811
+
+  Early stopping at epoch 115 (best val=0.6000 at epoch 14)
+
+Training done. Best val acc: 0.6000 (epoch 14)
+
+=======================================================
+            RUNG_homophily_adaptive - Stats            
+=======================================================
+  percentile_q:    0.75
+  q_relax:         0.2
+  q_max:           0.99
+  homophily_mode:  from_F0
+  Last h mean:     0.3076
+  Last q mean:     0.8885
+  Last gamma means per layer: [0.0033, 0.0017, 0.0016, 0.0016, 0.0015, 0.0015, 0.0015, 0.0015, 0.0015, 0.0015]
+=======================================================
+
+Acc: [0.6169154047966003, 0.6268656849861145, 0.5721392631530762]
+
+Fit RUNG_homophily_adaptive | lr=0.05, wd=0.0005, epochs=300
+  percentile_q=0.75, q_relax=0.2, q_max=0.99, homophily_mode=from_F0
+  Parameters: 109381
+  patience=100, grad_clip=1.0
+  Epoch   50 | loss=0.9517 | val_acc=0.6000 | h_mean=0.3841 | q_mean=0.8732
+  Epoch  100 | loss=0.9311 | val_acc=0.6000 | h_mean=0.4046 | q_mean=0.8691
+  Epoch  150 | loss=0.6848 | val_acc=0.4000 | h_mean=0.3015 | q_mean=0.8897
+  Epoch  200 | loss=0.7690 | val_acc=0.5600 | h_mean=0.3782 | q_mean=0.8744
+
+  Early stopping at epoch 205 (best val=0.7200 at epoch 104)
+
+Training done. Best val acc: 0.7200 (epoch 104)
+
+=======================================================
+            RUNG_homophily_adaptive - Stats            
+=======================================================
+  percentile_q:    0.75
+  q_relax:         0.2
+  q_max:           0.99
+  homophily_mode:  from_F0
+  Last h mean:     0.3373
+  Last q mean:     0.8825
+  Last gamma means per layer: [0.4684, 0.2688, 0.2126, 0.2019, 0.2049, 0.2077, 0.2072, 0.2058, 0.2055, 0.2048]
+=======================================================
+
+Acc: [0.6169154047966003, 0.6268656849861145, 0.5721392631530762, 0.5572139024734497]
+
+Fit RUNG_homophily_adaptive | lr=0.05, wd=0.0005, epochs=300
+  percentile_q=0.75, q_relax=0.2, q_max=0.99, homophily_mode=from_F0
+  Parameters: 109381
+  patience=100, grad_clip=1.0
+  Epoch   50 | loss=0.9139 | val_acc=0.4800 | h_mean=0.3071 | q_mean=0.8886
+  Epoch  100 | loss=0.8526 | val_acc=0.4800 | h_mean=0.3622 | q_mean=0.8776
+  Epoch  150 | loss=0.8987 | val_acc=0.5200 | h_mean=0.3428 | q_mean=0.8814
+  Epoch  200 | loss=0.7145 | val_acc=0.5200 | h_mean=0.3613 | q_mean=0.8777
+
+  Early stopping at epoch 233 (best val=0.6400 at epoch 132)
+
+Training done. Best val acc: 0.6400 (epoch 132)
+
+=======================================================
+            RUNG_homophily_adaptive - Stats            
+=======================================================
+  percentile_q:    0.75
+  q_relax:         0.2
+  q_max:           0.99
+  homophily_mode:  from_F0
+  Last h mean:     0.3069
+  Last q mean:     0.8886
+  Last gamma means per layer: [0.3792, 0.2046, 0.1739, 0.1636, 0.1642, 0.1615, 0.1613, 0.1601, 0.1602, 0.1590]
+=======================================================
+
+Acc: [0.6169154047966003, 0.6268656849861145, 0.5721392631530762, 0.5572139024734497, 0.5323383212089539]
+model RUNG_homophily_adaptive done, clean acc: 0.5810945153236389±0.03579324732681595
