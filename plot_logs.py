@@ -56,8 +56,10 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 # Create attack-type-specific output directories
 OUT_DIR_ATTACK = OUT_DIR / "attack"
 OUT_DIR_COSINE = OUT_DIR / "cosine_attack"
+OUT_DIR_COMPARISON = OUT_DIR / "attack_comparison"
 OUT_DIR_ATTACK.mkdir(parents=True, exist_ok=True)
 OUT_DIR_COSINE.mkdir(parents=True, exist_ok=True)
+OUT_DIR_COMPARISON.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # Regex helpers
@@ -908,10 +910,142 @@ def generate_all_figures(input_attack_data, output_dir, attack_type_name):
 
 
 # ---------------------------------------------------------------------------
+# Attack Comparison Figure Generator
+# ---------------------------------------------------------------------------
+def generate_comparison_figures(regular_attack_data, cosine_attack_data, output_dir, clean_data_ref):
+    """
+    Generate comparison figures showing both PGD and cosine attacks on same plot.
+    One figure per (dataset, model) combination.
+    
+    Naming pattern: <dataset>_<model>.png
+    Example: cora_RUNG.png, citeseer_RUNG_combined_model.png
+    
+    Parameters:
+    -----------
+    regular_attack_data : dict[str, dict[str, dict]]
+        Standard attack data: dataset -> label -> budget_dict
+    cosine_attack_data : dict[str, dict[str, dict]]
+        Cosine attack data: dataset -> label -> budget_dict
+    output_dir : Path
+        Directory where PNG figures are saved
+    clean_data_ref : dict[str, dict[str, tuple]]
+        Clean data reference (for clean accuracies)
+    """
+    
+    if not regular_attack_data and not cosine_attack_data:
+        print(f"  [skip] No attack data for comparison — comparison figures skipped.")
+        return
+    
+    print(f"\nGenerating attack comparison figures...")
+    
+    # Get all datasets
+    all_datasets = sorted(
+        set(list(regular_attack_data.keys()) + list(cosine_attack_data.keys()))
+    )
+    
+    for dataset in all_datasets:
+        regular_data = regular_attack_data.get(dataset, {})
+        cosine_data = cosine_attack_data.get(dataset, {})
+        
+        # Find all unique model labels
+        all_model_labels = sorted(set(list(regular_data.keys()) + list(cosine_data.keys())))
+        
+        for model_label in all_model_labels:
+            has_regular = model_label in regular_data
+            has_cosine = model_label in cosine_data
+            
+            if not (has_regular or has_cosine):
+                continue
+            
+            # Create figure comparing both attacks
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.set_title(f"Attack Comparison — {dataset} : {model_label}", fontsize=13, pad=10)
+            ax.set_xlabel("Attack budget (fraction of edges)", fontsize=11)
+            ax.set_ylabel("Accuracy", fontsize=11)
+            ax.grid(True, linestyle="--", alpha=0.4)
+            
+            c_data = clean_data_ref.get(dataset, {})
+            
+            colors = {
+                'pgd': '#1f77b4',      # blue for PGD
+                'cosine': '#ff7f0e'    # orange for cosine
+            }
+            
+            # Plot regular PGD attack
+            if has_regular:
+                budgets_dict = regular_data[model_label]
+                budgets_sorted = sorted(budgets_dict.keys())
+                
+                first_budget_data = budgets_dict[budgets_sorted[0]]
+                clean_mean = first_budget_data["clean_mean"]
+                clean_std = first_budget_data["clean_std"]
+                
+                if model_label in c_data:
+                    cm, cs = c_data[model_label]
+                    clean_mean, clean_std = cm, cs
+                
+                xs = [0.0] + budgets_sorted
+                means = [clean_mean] + [budgets_dict[b]["atk_mean"] for b in budgets_sorted]
+                stds = [clean_std] + [budgets_dict[b]["atk_std"] for b in budgets_sorted]
+                
+                ax.plot(xs, means, marker="o", linewidth=2.5, label="PGD Attack", 
+                       color=colors['pgd'], markersize=6)
+                ax.fill_between(
+                    xs,
+                    [m - s for m, s in zip(means, stds)],
+                    [m + s for m, s in zip(means, stds)],
+                    alpha=0.15,
+                    color=colors['pgd'],
+                )
+            
+            # Plot cosine attack
+            if has_cosine:
+                budgets_dict = cosine_data[model_label]
+                budgets_sorted = sorted(budgets_dict.keys())
+                
+                first_budget_data = budgets_dict[budgets_sorted[0]]
+                clean_mean = first_budget_data["clean_mean"]
+                clean_std = first_budget_data["clean_std"]
+                
+                if model_label in c_data:
+                    cm, cs = c_data[model_label]
+                    clean_mean, clean_std = cm, cs
+                
+                xs = [0.0] + budgets_sorted
+                means = [clean_mean] + [budgets_dict[b]["atk_mean"] for b in budgets_sorted]
+                stds = [clean_std] + [budgets_dict[b]["atk_std"] for b in budgets_sorted]
+                
+                ax.plot(xs, means, marker="s", linewidth=2.5, label="Cosine Attack", 
+                       color=colors['cosine'], markersize=6)
+                ax.fill_between(
+                    xs,
+                    [m - s for m, s in zip(means, stds)],
+                    [m + s for m, s in zip(means, stds)],
+                    alpha=0.15,
+                    color=colors['cosine'],
+                )
+            
+            ax.set_xlim(left=-0.01)
+            ax.set_ylim(bottom=0.0, top=1.05)
+            ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
+            ax.legend(loc="lower right", fontsize=10, framealpha=0.9)
+            fig.tight_layout()
+            
+            # Safe filename: replace special characters
+            safe_model = model_label.replace(" ", "_").replace("/", "_").replace("(", "").replace(")", "") \
+                                     .replace(",", "").replace("=", "").replace("γ", "gamma")
+            out_path = output_dir / f"{dataset}_{safe_model}.png"
+            fig.savefig(out_path, dpi=args.dpi)
+            plt.close(fig)
+            print(f"  Saved: {out_path}")
+
+
+# ---------------------------------------------------------------------------
 # Generate figures for both attack types
 # ---------------------------------------------------------------------------
 generate_all_figures(attack_data, OUT_DIR_ATTACK, "attack")
 generate_all_figures(cosine_attack_data, OUT_DIR_COSINE, "cosine_attack")
+generate_comparison_figures(attack_data, cosine_attack_data, OUT_DIR_COMPARISON, clean_data)
 
 # ---------------------------------------------------------------------------
 # Done
@@ -919,5 +1053,6 @@ generate_all_figures(cosine_attack_data, OUT_DIR_COSINE, "cosine_attack")
 print(f"\nAll figures written to:")
 print(f"  - Standard attacks: '{OUT_DIR_ATTACK}/'")
 print(f"  - Cosine attacks: '{OUT_DIR_COSINE}/'")
+print(f"  - Attack comparison: '{OUT_DIR_COMPARISON}/'")
 print("To re-run after new training/attack logs appear, just run:")
 print("    python plot_logs.py")
