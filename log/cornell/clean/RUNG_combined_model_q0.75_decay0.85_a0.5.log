@@ -1,0 +1,194 @@
+
+Detected GPU: Tesla T4 with compute capability 7.5
+Using GPU: Tesla T4
+
+
+Fit RUNG_combined_model | lr=0.05, schedule_lr=0.01500, wd=0.0005, epochs=300
+  gamma_reg_strength=0.0, patience=100, grad_clip=1.0
+  Initial schedule: gamma_0=6.0000, decay_rate=0.8500, alpha_blend=0.5000
+
+  Epoch   50 | loss=1.0923 | val=0.4444 | γ₀=6.5542, r=0.8508, α=0.5213
+
+  Epoch  100 | loss=1.0020 | val=0.5556 | γ₀=5.1129, r=0.7977, α=0.4566
+
+  Epoch  150 | loss=1.0796 | val=0.5556 | γ₀=3.9732, r=0.6461, α=0.3874
+
+  Epoch  200 | loss=0.8739 | val=0.5556 | γ₀=4.4294, r=0.5084, α=0.4123
+
+  Early stopping at epoch 203 (best val=0.6111 at epoch 102)
+
+Training done. Best val acc: 0.6111 (epoch 102)
+
+=======================================================
+              RUNG_combined_model — Stats              
+=======================================================
+  gamma_0:     5.1017
+  decay_rate:  0.7933
+  alpha_blend: 0.4558  (percentile dominant)
+  percentile_q: 0.75
+  parameters:  109384
+
+  Layer     gamma
+  ────────────────────
+      0    2.1686
+      1    1.0483
+      2    0.5420
+      3    0.2826
+      4    0.1545
+      5    0.0871
+      6    0.0503
+      7    0.0323
+      8    0.0237
+      9    0.0228
+=======================================================
+
+Acc: [0.4285714328289032]
+
+Fit RUNG_combined_model | lr=0.05, schedule_lr=0.01500, wd=0.0005, epochs=300
+  gamma_reg_strength=0.0, patience=100, grad_clip=1.0
+  Initial schedule: gamma_0=6.0000, decay_rate=0.8500, alpha_blend=0.5000
+
+  Epoch   50 | loss=1.1309 | val=0.3889 | γ₀=5.6528, r=0.8267, α=0.4831
+
+  Epoch  100 | loss=0.9993 | val=0.2222 | γ₀=4.4101, r=0.7681, α=0.4116
+
+  Early stopping at epoch 102 (best val=0.4444 at epoch 1)
+
+Training done. Best val acc: 0.4444 (epoch 1)
+
+=======================================================
+              RUNG_combined_model — Stats              
+=======================================================
+  gamma_0:     6.0000
+  decay_rate:  0.8500
+  alpha_blend: 0.5000  (percentile dominant)
+  percentile_q: 0.75
+  parameters:  109384
+
+  Layer     gamma
+  ────────────────────
+      0    1.8351
+      1    1.3667
+      2    1.0407
+      3    0.7945
+      4    0.6081
+      5    0.4647
+      6    0.3554
+      7    0.2721
+      8    0.2087
+      9    0.1601
+=======================================================
+
+Acc: [0.4285714328289032, 0.44897958636283875]
+
+Fit RUNG_combined_model | lr=0.05, schedule_lr=0.01500, wd=0.0005, epochs=300
+  gamma_reg_strength=0.0, patience=100, grad_clip=1.0
+  Initial schedule: gamma_0=6.0000, decay_rate=0.8500, alpha_blend=0.5000
+
+  Epoch   50 | loss=1.1444 | val=0.4444 | γ₀=6.5237, r=0.8222, α=0.5193
+
+  Epoch  100 | loss=0.7444 | val=0.3333 | γ₀=7.1229, r=0.6445, α=0.5264
+
+  Early stopping at epoch 102 (best val=0.4444 at epoch 1)
+
+Training done. Best val acc: 0.4444 (epoch 1)
+
+=======================================================
+              RUNG_combined_model — Stats              
+=======================================================
+  gamma_0:     6.0000
+  decay_rate:  0.8500
+  alpha_blend: 0.5000  (percentile dominant)
+  percentile_q: 0.75
+  parameters:  109384
+
+  Layer     gamma
+  ────────────────────
+      0    3.9512
+      1    2.3788
+      2    1.4907
+      3    0.9377
+      4    0.5954
+      5    0.3780
+      6    0.2414
+      7    0.1554
+      8    0.1006
+      9    0.0661
+=======================================================
+
+Acc: [0.4285714328289032, 0.44897958636283875, 0.44897958636283875]
+
+Fit RUNG_combined_model | lr=0.05, schedule_lr=0.01500, wd=0.0005, epochs=300
+  gamma_reg_strength=0.0, patience=100, grad_clip=1.0
+  Initial schedule: gamma_0=6.0000, decay_rate=0.8500, alpha_blend=0.5000
+
+  Epoch   50 | loss=1.0391 | val=0.5000 | γ₀=6.1423, r=0.8245, α=0.5029
+
+  Epoch  100 | loss=0.8648 | val=0.3889 | γ₀=5.4567, r=0.6871, α=0.4634
+
+  Early stopping at epoch 127 (best val=0.5000 at epoch 26)
+
+Training done. Best val acc: 0.5000 (epoch 26)
+
+=======================================================
+              RUNG_combined_model — Stats              
+=======================================================
+  gamma_0:     5.8418
+  decay_rate:  0.8526
+  alpha_blend: 0.4933  (percentile dominant)
+  percentile_q: 0.75
+  parameters:  109384
+
+  Layer     gamma
+  ────────────────────
+      0    1.6920
+      1    0.9707
+      2    0.5679
+      3    0.3361
+      4    0.1986
+      5    0.1186
+      6    0.0715
+      7    0.0439
+      8    0.0275
+      9    0.0178
+=======================================================
+
+Acc: [0.4285714328289032, 0.44897958636283875, 0.44897958636283875, 0.4285714328289032]
+
+Fit RUNG_combined_model | lr=0.05, schedule_lr=0.01500, wd=0.0005, epochs=300
+  gamma_reg_strength=0.0, patience=100, grad_clip=1.0
+  Initial schedule: gamma_0=6.0000, decay_rate=0.8500, alpha_blend=0.5000
+
+  Epoch   50 | loss=0.9900 | val=0.3889 | γ₀=6.6247, r=0.8223, α=0.5230
+
+  Epoch  100 | loss=0.8356 | val=0.4444 | γ₀=6.3411, r=0.6599, α=0.5095
+
+  Early stopping at epoch 102 (best val=0.4444 at epoch 1)
+
+Training done. Best val acc: 0.4444 (epoch 1)
+
+=======================================================
+              RUNG_combined_model — Stats              
+=======================================================
+  gamma_0:     6.0000
+  decay_rate:  0.8500
+  alpha_blend: 0.5000  (percentile dominant)
+  percentile_q: 0.75
+  parameters:  109384
+
+  Layer     gamma
+  ────────────────────
+      0    3.4376
+      1    2.1309
+      2    1.3670
+      3    0.8881
+      4    0.5833
+      5    0.3849
+      6    0.2589
+      7    0.1723
+      8    0.1203
+      9    0.0816
+=======================================================
+
+Acc: [0.4285714328289032, 0.44897958636283875, 0.44897958636283875, 0.4285714328289032, 0.44897958636283875]
+model RUNG_combined_model done, clean acc: 0.44081632494926454±0.009997912550103879
