@@ -24,6 +24,12 @@ ADDITIONAL USAGE:
     # Attack only (requires models already saved by a previous clean run):
     python run_all.py --datasets cora citeseer --models RUNG --skip_clean
 
+    # Include cosine adaptive attack (default: disabled):
+    python run_all.py --datasets cora citeseer --models RUNG RUNG_combined_model --cosine-attack
+
+    # Cosine attack with custom stealth weight and epochs:
+    python run_all.py --datasets cora --models RUNG_combined_model --cosine-attack --beta 2.0 --cosine_attack_epochs 200
+
     # Use a custom norm / gamma for non-compound model names:
     python run_all.py --datasets cora --models RUNG --norm MCP --gamma 6.0
 
@@ -298,8 +304,8 @@ parser.add_argument(
     help="Skip the PGD-attack evaluation step.",
 )
 parser.add_argument(
-    "--skip_cosine_attack", action="store_true",
-    help="Skip the cosine adaptive PGD-attack evaluation step.",
+    "--cosine-attack", action="store_true",
+    help="Run the cosine adaptive PGD-attack evaluation step (default: disabled).",
 )
 
 args = parser.parse_args()
@@ -341,7 +347,7 @@ def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
         ]
         if args.attack_steps is not None:
             cmd.append(f"--attack_epochs={args.attack_steps}")
-        if not args.skip_cosine_attack:
+        if args.cosine_attack:
             cmd += [
                 "--run_cosine_attack",
                 f"--cosine_attack_epochs={args.cosine_attack_epochs}",
@@ -475,7 +481,7 @@ if not args.skip_clean:
     phases.append(("clean.py",  "Train (clean)"))
 if not args.skip_attack:
     phases.append(("attack.py", "PGD attack"))
-if not args.skip_cosine_attack:
+if args.cosine_attack:
     phases.append(("cosine_attack.py", "Cosine adaptive PGD attack"))
 
 if not phases:
