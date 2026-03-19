@@ -12,6 +12,7 @@ from train_eval_data.fit_confidence_lambda import fit_confidence_lambda
 from train_eval_data.fit_percentile_gamma import fit_percentile_gamma
 from train_eval_data.fit_learnable_distance import fit_learnable_distance
 from train_eval_data.fit_learnable_combined import fit_learnable_combined
+from train_eval_data.fit_homophily_adaptive import fit_homophily_adaptive
 from train_eval_data.fit_percentile_adv import fit_percentile_adv
 from train_eval_data.fit_percentile_adv_v2 import fit_percentile_adv_v2
 from train_eval_data.fit_parametric_adv import fit_parametric_adv
@@ -127,6 +128,14 @@ parser.add_argument('--dist_lr_factor', type=float, default=0.5,
                     help='LR multiplier for distance module parameters in RUNG_learnable_distance. '
                          'Only used if distance_mode is projection or bilinear. '
                          'Default 0.5 = distance LR is half of base LR.')
+parser.add_argument('--q_relax', type=float, default=0.20,
+                help='Homophily-adaptive relaxation for RUNG_homophily_adaptive. '
+                    'q_i = percentile_q + (1 - h_i) * q_relax.')
+parser.add_argument('--q_max', type=float, default=0.99,
+                help='Maximum q_i for RUNG_homophily_adaptive.')
+parser.add_argument('--homophily_mode', type=str, default='from_F0',
+                choices=['from_F0', 'per_layer'],
+                help='Homophily estimation mode for RUNG_homophily_adaptive.')
 parser.add_argument('--gamma_mode', type=str, default='per_layer',
                 choices=['per_layer', 'schedule'],
                 help='Learnable gamma mode for RUNG_learnable_combined. '
@@ -257,6 +266,11 @@ def clean_rep(model, train_param, dataset_name, seed=None):
                 dist_lr_factor=args.dist_lr_factor,
                 **train_param,
             )
+        elif args.model == 'RUNG_homophily_adaptive':
+            fit_homophily_adaptive(
+                cur_model, A, X, y, train_idx, val_idx,
+                **train_param,
+            )
         elif args.model == 'RUNG_learnable_combined':
             fit_learnable_combined(
                 cur_model, A, X, y, train_idx, val_idx,
@@ -345,6 +359,11 @@ def make_clean_model_and_save(do_save_model=False, do_save_acc=False, rep_num=5,
         model_config['percentile_q_late'] = args.percentile_q_late
         model_config['distance_mode']     = args.distance_mode
         model_config['proj_dim']          = args.proj_dim
+    elif args.model == 'RUNG_homophily_adaptive':
+        model_config['percentile_q']      = args.percentile_q
+        model_config['q_relax']           = args.q_relax
+        model_config['q_max']             = args.q_max
+        model_config['homophily_mode']    = args.homophily_mode
     elif args.model == 'RUNG_learnable_combined':
         model_config['gamma_mode'] = args.gamma_mode
     # Pass RUNG_combined_model-specific params into model config.

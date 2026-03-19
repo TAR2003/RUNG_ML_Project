@@ -80,6 +80,13 @@ def get_log_identifier(model_name: str, args) -> str:
             return f"{model_name}_q{q}_qLate{q_late}"
         else:
             return f"{model_name}_q{q}"
+
+    elif model_name == 'RUNG_homophily_adaptive':
+        q = getattr(args, 'percentile_q', 0.75)
+        q_relax = getattr(args, 'q_relax', 0.20)
+        q_max = getattr(args, 'q_max', 0.99)
+        mode = getattr(args, 'homophily_mode', 'from_F0')
+        return f"{model_name}_q{q}_relax{q_relax}_qMax{q_max}_{mode}"
     
     elif model_name == 'RUNG_combined_model':
         # Combined model: percentile + parametric + cosine

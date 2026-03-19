@@ -64,6 +64,13 @@ parser.add_argument('--proj_dim', type=int, default=32,
                     help='Projection dimension for projection/bilinear modes (default: 32).')
 parser.add_argument('--dist_lr_factor', type=float, default=0.5,
                     help='LR multiplier for distance module (default: 0.5).')
+parser.add_argument('--q_relax', type=float, default=0.20,
+                    help='Homophily-adaptive relaxation for RUNG_homophily_adaptive.')
+parser.add_argument('--q_max', type=float, default=0.99,
+                    help='Maximum q_i for RUNG_homophily_adaptive.')
+parser.add_argument('--homophily_mode', type=str, default='from_F0',
+                    choices=['from_F0', 'per_layer'],
+                    help='Homophily estimation mode for RUNG_homophily_adaptive.')
 parser.add_argument('--gamma_mode', type=str, default='per_layer',
                     choices=['per_layer', 'schedule'],
                     help='Learnable gamma mode for RUNG_learnable_combined.')
@@ -321,6 +328,11 @@ if __name__ == '__main__':
             model_params['proj_dim']          = args.proj_dim
         elif args.model == 'RUNG_learnable_combined':
             model_params['gamma_mode'] = args.gamma_mode
+        elif args.model == 'RUNG_homophily_adaptive':
+            model_params['percentile_q']   = args.percentile_q
+            model_params['q_relax']        = args.q_relax
+            model_params['q_max']          = args.q_max
+            model_params['homophily_mode'] = args.homophily_mode
         elif args.model == 'RUNG_combined':
             model_params['percentile_q']      = args.percentile_q
             model_params['use_layerwise_q']   = args.use_layerwise_q

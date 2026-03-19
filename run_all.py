@@ -274,6 +274,19 @@ parser.add_argument(
     "--dist_lr_factor", type=float, default=0.5,
     help="LR multiplier for distance module in RUNG_learnable_distance (default: 0.5).",
 )
+parser.add_argument(
+    "--q_relax", type=float, default=0.20,
+    help="Homophily-adaptive relaxation for RUNG_homophily_adaptive (default: 0.20).",
+)
+parser.add_argument(
+    "--q_max", type=float, default=0.99,
+    help="Maximum q_i for RUNG_homophily_adaptive (default: 0.99).",
+)
+parser.add_argument(
+    "--homophily_mode", type=str, default="from_F0",
+    choices=["from_F0", "per_layer"],
+    help="Homophily estimation mode for RUNG_homophily_adaptive (default: from_F0).",
+)
 
 # ===== Control flags =====
 parser.add_argument(
@@ -407,6 +420,14 @@ def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
                 f"--dist_lr_factor={args.dist_lr_factor}",
             ]
 
+        elif model == "RUNG_homophily_adaptive":
+            cmd += [
+                f"--percentile_q={args.percentile_q}",
+                f"--q_relax={args.q_relax}",
+                f"--q_max={args.q_max}",
+                f"--homophily_mode={args.homophily_mode}",
+            ]
+
         elif model == "RUNG_learnable_combined":
             cmd += [
                 f"--gamma_mode={args.gamma_mode}",
@@ -427,6 +448,13 @@ def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
         cmd.extend(["--budgets"] + [str(b) for b in args.budgets])
         if args.attack_steps is not None:
             cmd.append(f"--attack_steps={args.attack_steps}")
+        if model == "RUNG_homophily_adaptive":
+            cmd += [
+                f"--percentile_q={args.percentile_q}",
+                f"--q_relax={args.q_relax}",
+                f"--q_max={args.q_max}",
+                f"--homophily_mode={args.homophily_mode}",
+            ]
     elif script == "cosine_attack.py":
         # Pass the extended budget array and cosine-specific args.
         cmd.extend(["--budgets"] + [str(b) for b in args.budgets])
@@ -540,6 +568,7 @@ print(f"  Model-specific configuration:")
 print(f"    RUNG & RUNG_learnable_gamma:  MCP/SCAD penalty, gamma={args.gamma}")
 print(f"    RUNG_percentile_gamma:        Percentile-based gamma, percentile_q={args.percentile_q}")
 print(f"    RUNG_learnable_distance:      Distance={args.distance_mode}, percentile_q={args.percentile_q}")
+print(f"    RUNG_homophily_adaptive:     percentile_q={args.percentile_q}, q_relax={args.q_relax}, mode={args.homophily_mode}")
 print(f"    RUNG_learnable_combined:      Cosine + gamma_mode={args.gamma_mode}, gamma_lr_factor={args.gamma_lr_factor}")
 print(f"    RUNG_combined:                Cosine distance + percentile_q={args.percentile_q}")
 print(f"    RUNG_combined_model:          Parametric + percentile gamma + cosine, α={args.alpha_blend_init}, r={args.decay_rate_init}")

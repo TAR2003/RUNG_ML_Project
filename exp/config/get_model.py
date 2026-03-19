@@ -19,6 +19,7 @@ from model.rung_percentile_gamma import RUNG_percentile_gamma
 from model.rung_learnable_distance import RUNG_learnable_distance
 from model.rung_learnable_combined import RUNG_learnable_combined
 from model.rung_combined import RUNG_combined
+from model.rung_homophily_adaptive import RUNG_homophily_adaptive
 from model.rung_combined_model import RUNG_combined_model
 
 
@@ -316,6 +317,30 @@ def get_model_default(
             dropout           = dropout,
         ).to(device)
         return model_comb, custom_fit_params
+    elif model_name == 'RUNG_homophily_adaptive':
+        # RUNG with cosine distance + per-node homophily-adaptive percentile gamma.
+        scad_a             = custom_model_params.get('scad_a', 3.7)
+        prop_step          = custom_model_params.get('prop_step', 10)
+        dropout            = custom_model_params.get('dropout', 0.5)
+        lam_hat            = custom_model_params.get('lam_hat', 0.9)
+        percentile_q       = custom_model_params.get('percentile_q', 0.75)
+        q_relax            = custom_model_params.get('q_relax', 0.20)
+        q_max              = custom_model_params.get('q_max', 0.99)
+        homophily_mode     = custom_model_params.get('homophily_mode', 'from_F0')
+        model_ha = RUNG_homophily_adaptive(
+            in_dim            = D,
+            out_dim           = C,
+            hidden_dims       = [64],
+            lam_hat           = lam_hat,
+            percentile_q      = percentile_q,
+            q_relax           = q_relax,
+            q_max             = q_max,
+            homophily_mode    = homophily_mode,
+            scad_a            = scad_a,
+            prop_step         = prop_step,
+            dropout           = dropout,
+        ).to(device)
+        return model_ha, custom_fit_params
     elif model_name == 'RUNG_combined_model':
         # RUNG with all three mechanisms:
         # 1. Cosine distance (from RUNG_learnable_distance)
@@ -395,6 +420,7 @@ def get_model_default(
             f"RUNG_new_L2, RUNG_new_ADAPTIVE, RUNG_learnable_gamma, "
             f"RUNG_parametric_gamma, RUNG_confidence_lambda, RUNG_percentile_gamma, "
             f"RUNG_learnable_distance, RUNG_learnable_combined, RUNG_combined, RUNG_combined_model, "
+            f"RUNG_homophily_adaptive, "
             f"RUNG_percentile_adv, RUNG_parametric_adv, "
             f"GCN, GAT, APPNP, L1, MLP."
         )
