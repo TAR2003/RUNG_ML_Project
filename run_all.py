@@ -47,7 +47,7 @@ SUPPORTED MODELS (4 core models recommended):
         ★ RUNG_learnable_combined   — Cosine distance + learnable gamma in (0,2)
         ★ RUNG_combined             — Percentile gamma + cosine distance
         ★ RUNG_combined_model       — Parametric + percentile gamma + cosine distance (NEW)
-        ★ RUNG (default MCP)        — Baseline with fixed penalty
+        ★ RUNG_strategy / S01-S34       — roadmap presets (docs/strategy/RUNG_next_strategies.md)
 
     Other:
         RUNG_learnable_gamma, RUNG_parametric_gamma, RUNG_confidence_lambda
@@ -88,6 +88,8 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+
+from model.strategy_cli import add_strategy_args
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -183,6 +185,7 @@ parser.add_argument(
     "--decay_rate_reg_strength", type=float, default=0.0,
     help="Decay rate regularisation for RUNG_parametric_gamma (default: 0.0).",
 )
+add_strategy_args(parser)
 
 # ===== RUNG_combined_model parameters =====
 parser.add_argument(
@@ -377,6 +380,20 @@ def _run(script: str, dataset: str, model: str) -> tuple[bool, float]:
         f"--gamma={args.gamma}",
         f"--data={dataset}",
     ]
+    if args.lam_hat is not None:
+        cmd.append(f"--lam_hat={args.lam_hat}")
+    if args.prop_step is not None:
+        cmd.append(f"--prop_step={args.prop_step}")
+    if args.train_mode is not None:
+        cmd.append(f"--train_mode={args.train_mode}")
+    if args.consistency_weight is not None:
+        cmd.append(f"--consistency_weight={args.consistency_weight}")
+    if args.homophily_threshold is not None:
+        cmd.append(f"--homophily_threshold={args.homophily_threshold}")
+    if args.report_bias:
+        cmd.append("--report_bias")
+    if args.strategy is not None:
+        cmd.append(f"--strategy={args.strategy}")
     
     if script == "clean.py":
         cmd.append(f"--max_epoch={args.max_epoch}")

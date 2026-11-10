@@ -103,8 +103,9 @@ def _parse_model_identifier(stem: str) -> dict:
         'RUNG_learnable_gamma', 'RUNG_parametric_gamma', 'RUNG_percentile_gamma',
         'RUNG_percentile_adv_v2', 'RUNG_percentile_adv', 'RUNG_parametric_adv',
         'RUNG_new_ADAPTIVE', 'RUNG_new_SCAD', 'RUNG_new_L1', 'RUNG_new_L2',
-        'RUNG_SCAD', 'RUNG_L1', 'RUNG_L2', 'RUNG_new', 'RUNG',
-        'RUNG_confidence_lambda', 'RUNG_combined',
+        'RUNG_SCAD', 'RUNG_L1', 'RUNG_L2', 'RUNG_new',
+        'RUNG_homophily_adaptive', 'RUNG_confidence_lambda', 'RUNG_strategy',
+        'RUNG_combined', 'RUNG',
         'APPNP', 'GAT', 'GCN', 'MLP', 'L1'
     ]
     
@@ -260,8 +261,10 @@ def _attack_label(stem: str) -> str:
         alpha = info.get('alpha_blend', '?').rstrip("0").rstrip(".")
         return f"{model} (q={q}, r={decay}, α={alpha})"
     
-    elif 'confidence' in model.lower():
-        # Confidence-lambda
+    elif model == 'RUNG_strategy':
+        return remainder or 'RUNG_strategy'
+
+    elif 'confidence' in model.lower() or 'homophily' in model.lower():
         return f"{model}"
     
     else:

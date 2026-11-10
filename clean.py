@@ -16,6 +16,8 @@ from train_eval_data.fit_homophily_adaptive import fit_homophily_adaptive
 from train_eval_data.fit_percentile_adv import fit_percentile_adv
 from train_eval_data.fit_percentile_adv_v2 import fit_percentile_adv_v2
 from train_eval_data.fit_parametric_adv import fit_parametric_adv
+from train_eval_data.fit_strategy import fit_strategy
+from model.strategy_cli import add_strategy_args, normalize_strategy_model, strategy_config_from_args
 from experiments.run_ablation import pgd_attack
 from exp.config.get_model_cora import get_model_default_cora
 from exp.config.get_model_citeseer import get_model_default_citeseer
@@ -183,8 +185,10 @@ parser.add_argument('--attack_freq_v2', type=int, default=3,
                     help='[V2] Regenerate attack every N epochs. Default 3 (fresher examples).')
 parser.add_argument('--warmup_epochs_v2', type=int, default=100,
                     help='[V2] Clean-only training epochs. Default 100 (MLP stabilization).')
+add_strategy_args(parser)
 
 args = parser.parse_args()
+normalize_strategy_model(args)
 # Compound model names encode both model and norm (e.g. RUNG_new_SCAD).
 # Normalise them into separate args.model / args.norm before anything else.
 _COMPOUND_MODEL_MAP = {
@@ -320,6 +324,11 @@ def clean_rep(model, train_param, dataset_name, seed=None):
                 curriculum_epochs=args.curriculum_epochs,
                 **train_param,
             )
+        elif args.model == 'RUNG_strategy':
+            fit_strategy(
+                cur_model, A, X, y, train_idx, val_idx, test_idx,
+                **train_param,
+            )
         
         cur_model.eval()
         acc.append(accuracy(cur_model(A, X)[test_idx, :], y[test_idx]).cpu().item())
@@ -384,6 +393,8 @@ def make_clean_model_and_save(do_save_model=False, do_save_acc=False, rep_num=5,
     # RUNG_parametric_adv uses RUNG_parametric_gamma architecture
     elif args.model == 'RUNG_parametric_adv':
         model_config['decay_rate_init']   = args.decay_rate_init
+    elif args.model == 'RUNG_strategy':
+        model_config.update(strategy_config_from_args(args))
 
     model_ls = [
         [args.model, model_config, {'lr':args.lr, 'weight_decay':args.weight_decay,'max_epoch': args.max_epoch}],

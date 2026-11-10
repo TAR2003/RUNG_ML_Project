@@ -10,6 +10,7 @@ from gb.exutil import make_attacked_model
 from gb.metric import accuracy
 from train_eval_data.fit import fit
 from utils import get_log_identifier
+from model.strategy_cli import add_strategy_args, normalize_strategy_model, strategy_config_from_args
 import copy
 import yaml
 
@@ -85,8 +86,10 @@ parser.add_argument('--attack_epochs', type=int, default=None,
                     help='Alias for --attack_steps (if set, overrides --attack_steps).')
 parser.add_argument('--beta', type=float, default=1.0,
                     help='Stealth weight for cosine loss term (default: 1.0).')
+add_strategy_args(parser)
 
 args = parser.parse_args()
+normalize_strategy_model(args)
 # Compound model names encode both model and norm (e.g. RUNG_new_SCAD).
 # Normalise them into separate args.model / args.norm before anything else.
 _COMPOUND_MODEL_MAP = {
@@ -383,6 +386,8 @@ if __name__ == '__main__':
             model_params['percentile_q']      = args.percentile_q
             model_params['decay_rate_init']   = args.decay_rate_init
             model_params['alpha_blend_init']  = args.alpha_blend_init
+        elif args.model == 'RUNG_strategy':
+            model_params.update(strategy_config_from_args(args))
         run_global_evasion_adaptive_exp(
             [[args.model, model_params, {'max_epoch': 300}]],
             iter=args.attack_steps,

@@ -245,9 +245,17 @@ class AdversarialTrainer:
 
         t0 = time.time()
 
-        # Compute budget in terms of edge count
-        # A is dense [N,N] adjacency, so number of edges = count_nonzero / 2
-        n_edges = A.count_nonzero().item() // 2
+        try:
+            n_edges = int(torch.count_nonzero(A).detach().cpu().item()) // 2
+        except Exception as exc:
+            print(f"Attack device failed ({type(exc).__name__}: {exc}). Moving this step to CPU.")
+            device = torch.device("cpu")
+            self.model = self.model.to(device)
+            A = A.to(device)
+            X = X.to(device)
+            y = y.to(device)
+            test_idx = test_idx.to(device)
+            n_edges = int(torch.count_nonzero(A).item()) // 2
         budget_edge_num = max(1, int(train_budget * n_edges))
 
         # Call the attack function

@@ -21,6 +21,7 @@ from model.rung_learnable_combined import RUNG_learnable_combined
 from model.rung_combined import RUNG_combined
 from model.rung_homophily_adaptive import RUNG_homophily_adaptive
 from model.rung_combined_model import RUNG_combined_model
+from model.strategy_presets import PRESETS, build_strategy_model, resolve_preset
 
 
 # preprocessing for sontructing models
@@ -48,21 +49,19 @@ def get_model_default(
                     f"\nDetected GPU: {props.name} with compute capability "
                     f"{props.major}.{props.minor}"
                 )
-                # PyTorch 1.12.1 supports compute capability 5.0+
-                if props.major < 5:
-                    print(
-                        f"GPU {props.name} with compute capability "
-                        f"{props.major}.{props.minor} is not supported; falling back to CPU."
-                    )
-                    device = torch.device('cpu')
-                else:
-                    device = torch.device('cuda')
-                    print(f"Using GPU: {props.name}\n")
+                probe = torch.zeros(1, device="cuda")
+                probe = probe + 1
+                torch.cuda.synchronize()
+                device = torch.device("cuda")
+                print(f"Using GPU: {props.name}\n")
             except Exception as e:
-                print(f"Error querying GPU properties: {e}. Falling back to CPU.")
-                device = torch.device('cpu')
+                print(
+                    f"CUDA kernel failed ({type(e).__name__}: {e}). "
+                    "Falling back to CPU."
+                )
+                device = torch.device("cpu")
         else:
-            device = torch.device('cpu')
+            device = torch.device("cpu")
     torch.manual_seed(0 if seed is None else seed)
 
     A, X, y = get_dataset(dataset)
@@ -413,6 +412,11 @@ def get_model_default(
             dropout=dropout,
         ).to(device)
         return model_paa, custom_fit_params
+    elif model_name == 'RUNG_strategy' or model_name in PRESETS:
+        strategy_id = custom_model_params.get('strategy', model_name)
+        resolved = resolve_preset(strategy_id, custom_model_params)
+        model_st = build_strategy_model(D, C, resolved).to(device)
+        return model_st, custom_fit_params
     else:
         raise ValueError(
             f"Unknown model_name '{model_name}'. "
@@ -421,7 +425,7 @@ def get_model_default(
             f"RUNG_parametric_gamma, RUNG_confidence_lambda, RUNG_percentile_gamma, "
             f"RUNG_learnable_distance, RUNG_learnable_combined, RUNG_combined, RUNG_combined_model, "
             f"RUNG_homophily_adaptive, "
-            f"RUNG_percentile_adv, RUNG_parametric_adv, "
-            f"GCN, GAT, APPNP, L1, MLP."
+            f"RUNG_percentile_adv, RUNG_parametric_adv, RUNG_strategy, "
+            f"S01-S34, GCN, GAT, APPNP, L1, MLP."
         )
 

@@ -16,6 +16,12 @@ import torch
 # ============================================================================
 
 def get_log_identifier(model_name: str, args) -> str:
+    strategy = getattr(args, "strategy", None)
+    if model_name == "RUNG_strategy" or (
+        isinstance(model_name, str) and len(model_name) > 1 and model_name[0] == "S" and model_name[1:].isdigit()
+    ):
+        return f"RUNG_strategy_{strategy or model_name}"
+
     """
     Generate a model-specific log identifier that reflects the actual hyperparameters
     being used for training/attack, not generic defaults.
